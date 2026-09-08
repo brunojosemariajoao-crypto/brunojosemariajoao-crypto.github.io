@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b6b3a" />
+  <meta name="description" content="Central VitalVeg — gestão inteligente de encomendas, conversas e entregas." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Central VitalVeg</title>
+</head>
+<body>
+  <div id="appShell" class="app-shell">
+    <aside class="sidebar">
+      <div class="brand brand--desktop" aria-label="VitalVeg">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M31 44C17 39 12 27 15 14c13 3 23 13 16 30Z" fill="#36b95f"/>
+          <path d="M33 43C31 27 38 13 52 8c5 14-2 29-19 35Z" fill="#49cb68"/>
+          <path d="M31 44c-3-11-7-20-14-27M33 43c4-12 10-22 18-31" fill="none" stroke="#128449" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div class="brand-text-wrap">
+          <div class="brand-name">VitalVeg</div>
+          <div class="brand-sub">PRODUÇÕES HORTÍCOLAS</div>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span>Início</span></button>
+        <button class="nav-item" data-view="conversations"><span class="nav-icon">◌</span><span>Conversas</span><span class="pill" id="navReviewCount">3</span></button>
+        <button class="nav-item" data-view="orders"><span class="nav-icon">▣</span><span>Encomendas</span></button>
+        <button class="nav-item" data-view="customers"><span class="nav-icon">◎</span><span>Clientes</span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span>Definições</span></button>
+      </nav>
+
+      <div class="side-status">
+        <span class="status-dot"></span>
+        <div><strong>Modo de preparação</strong><small>Email ainda não ligado</small></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="brand brand--mobile" aria-label="VitalVeg">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M31 44C17 39 12 27 15 14c13 3 23 13 16 30Z" fill="#36b95f"/>
+            <path d="M33 43C31 27 38 13 52 8c5 14-2 29-19 35Z" fill="#49cb68"/>
+            <path d="M31 44c-3-11-7-20-14-27M33 43c4-12 10-22 18-31" fill="none" stroke="#128449" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          <div class="brand-name">VitalVeg</div>
+        </div>
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input id="searchInput" type="search" placeholder="Pesquisar cliente, produto ou conversa…" />
+        </div>
+        <button class="profile-button" aria-label="Perfil"><span>BS</span></button>
+      </header>
+
+      <section id="view-dashboard" class="view active-view">
+        <div class="hero-row">
+          <div>
+            <p class="eyebrow">CENTRAL DE COMUNICAÇÕES</p>
+            <h1>Olá, Bruno.</h1>
+            <p class="muted">Só tens de olhar para o que realmente precisa de ti.</p>
+          </div>
+          <div class="date-chip" id="todayChip"></div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card metric-green"><div class="metric-icon">▣</div><div><span>Encomendas hoje</span><strong id="metricOrders">7</strong><small>5 já confirmadas</small></div></article>
+          <article class="metric-card metric-amber"><div class="metric-icon">!</div><div><span>A rever</span><strong id="metricReview">3</strong><small>Precisam de decisão humana</small></div></article>
+          <article class="metric-card metric-blue"><div class="metric-icon">✓</div><div><span>Resolvidas automaticamente</span><strong>18</strong><small>Sem intervenção manual</small></div></article>
+          <article class="metric-card metric-violet"><div class="metric-icon">◌</div><div><span>Conversas em curso</span><strong>5</strong><small>Email · WhatsApp futuro</small></div></article>
+        </div>
+
+        <div class="dashboard-grid">
+          <section class="panel activity-panel">
+            <div class="panel-head"><div><h2>Atividade recente</h2><p>O que entrou e o que mudou.</p></div><button class="text-button" data-jump="conversations">Ver todas</button></div>
+            <div id="activityList" class="activity-list"></div>
+          </section>
+
+          <section class="panel attention-panel">
+            <div class="panel-head"><div><h2>Precisa de ti</h2><p>Exceções que a automação não deve decidir.</p></div></div>
+            <div id="reviewList" class="review-list"></div>
+          </section>
+        </div>
+
+        <section class="panel delivery-panel">
+          <div class="panel-head"><div><h2>Próximas entregas</h2><p>Resumo operacional, sem repetir ao cliente aquilo que ele já sabe.</p></div><span class="tag tag-green">Regra das 14:00 ativa</span></div>
+          <div class="delivery-strip" id="deliveryStrip"></div>
+        </section>
+      </section>
+
+      <section id="view-conversations" class="view">
+        <div class="page-head"><div><p class="eyebrow">EMAIL</p><h1>Conversas</h1><p class="muted">Cada conversa mantém o contexto inteiro e a última instrução prevalece.</p></div><div class="segmented"><button class="seg active" data-filter="all">Todas</button><button class="seg" data-filter="review">A rever</button><button class="seg" data-filter="done">Tratadas</button></div></div>
+        <div class="conversation-layout">
+          <section class="panel conversation-list-panel"><div id="conversationList" class="conversation-list"></div></section>
+          <section class="panel conversation-detail" id="conversationDetail"></section>
+        </div>
+      </section>
+
+      <section id="view-orders" class="view">
+        <div class="page-head"><div><p class="eyebrow">OPERAÇÃO</p><h1>Encomendas</h1><p class="muted">O pedido continua a ser uma encomenda mesmo depois de confirmado.</p></div><button class="primary-action" id="newOrderBtn">＋ Nova encomenda</button></div>
+        <section class="panel table-panel"><div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>Cliente</th><th>Pedido final</th><th>Entrega</th><th>Estado</th><th></th></tr></thead><tbody id="ordersBody"></tbody></table></div></section>
+      </section>
+
+      <section id="view-customers" class="view">
+        <div class="page-head"><div><p class="eyebrow">CLIENTES</p><h1>Clientes</h1><p class="muted">Histórico simples por loja e padrões habituais de encomenda.</p></div></div>
+        <div id="customerGrid" class="customer-grid"></div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <div class="page-head"><div><p class="eyebrow">AUTOMAÇÃO</p><h1>Definições</h1><p class="muted">As regras de entrega ficam aqui — visíveis, editáveis e sem surpresas.</p></div></div>
+        <div class="settings-grid">
+          <section class="panel settings-card">
+            <div class="settings-title"><div class="settings-icon">▣</div><div><h2>Dias de entrega</h2><p>Seleciona os dias habituais de distribuição.</p></div></div>
+            <div class="weekday-grid" id="weekdayGrid"></div>
+          </section>
+          <section class="panel settings-card">
+            <div class="settings-title"><div class="settings-icon">◷</div><div><h2>Hora limite</h2><p>No próprio dia, depois desta hora passa para a próxima entrega.</p></div></div>
+            <div class="time-control"><input id="cutoffInput" type="time" value="14:00"/><div class="time-rule"><span>Antes das 14:00</span><strong>Revisão humana</strong></div><div class="time-rule"><span>14:00 ou depois</span><strong>Próximo dia de entrega</strong></div></div>
+          </section>
+          <section class="panel settings-card settings-wide">
+            <div class="settings-title"><div class="settings-icon">✦</div><div><h2>Autoridade da automação</h2><p>O que pode ser decidido sem te incomodar.</p></div></div>
+            <div class="authority-grid">
+              <label class="switch-row"><input type="checkbox" checked><span class="switch"></span><span><strong>Confirmar encomenda normal</strong><small>Recebida na véspera ou fora do próprio dia de distribuição.</small></span></label>
+              <label class="switch-row"><input type="checkbox" checked><span class="switch"></span><span><strong>Responder a pedido de confirmação</strong><small>“Recebeu a nossa encomenda?” → confirma receção.</small></span></label>
+              <label class="switch-row"><input type="checkbox" checked><span class="switch"></span><span><strong>Encerrar “ok / obrigado”</strong><small>Não envia resposta desnecessária.</small></span></label>
+              <label class="switch-row"><input type="checkbox" checked><span class="switch"></span><span><strong>Bloquear decisões comerciais</strong><small>Descontos, reclamações e exceções ficam sempre para humano.</small></span></label>
+            </div>
+          </section>
+        </div>
+        <div class="settings-actions"><button class="primary-action" id="saveSettings">✓ Guardar alterações</button><span id="saveHint" class="save-hint"></span></div>
+      </section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Navegação móvel">
+      <button class="mobile-nav-item active" data-view="dashboard"><span>⌂</span><small>Início</small></button>
+      <button class="mobile-nav-item" data-view="conversations"><span>◌</span><small>Conversas</small></button>
+      <button class="mobile-fab" data-view="orders" aria-label="Encomendas">＋</button>
+      <button class="mobile-nav-item" data-view="orders"><span>▣</span><small>Encomendas</small></button>
+      <button class="mobile-nav-item" data-view="settings"><span>⚙</span><small>Mais</small></button>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
