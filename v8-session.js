@@ -1,4 +1,4 @@
-/* Central VitalVeg V8.5 — sessão persistente do email, parser genérico e impressão */
+/* Central VitalVeg V8.5 — sessão persistente do email, parser genérico, impressão e estado de envio */
 (() => {
   const ACCOUNT='geral@vitalveg.pt';
   let installed=false;
@@ -67,7 +67,13 @@
         const data=await res.json().catch(()=>({}));
         if(res.status===401){state.credentials=null;openConnectGate('Autoriza novamente este dispositivo para enviar.');return;}
         if(!res.ok)throw new Error(data.error||'Falha no envio');
-        showToast('Email enviado.');await new Promise(r=>setTimeout(r,900));await fetchRealMail(false);
+        if(Array.isArray(data.rejected)&&data.rejected.length){throw new Error(`O servidor rejeitou: ${data.rejected.join(', ')}`);}
+        if(data.savedToSent){
+          showToast('Email aceite pelo servidor e guardado em Enviados.');
+        }else{
+          alert(`O servidor aceitou o email, mas a cópia não ficou em Enviados.${data.sentWarning?`\n\n${data.sentWarning}`:''}`);
+        }
+        await new Promise(r=>setTimeout(r,1000));await fetchRealMail(false);
       }catch(e){alert(e?.message||'Não foi possível enviar.');}
       finally{if(btn){btn.disabled=false;btn.textContent='Rever e enviar resposta';}}
     };
