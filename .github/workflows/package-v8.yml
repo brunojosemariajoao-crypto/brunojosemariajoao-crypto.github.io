@@ -1,0 +1,41 @@
+name: Package Central VitalVeg V8
+
+on:
+  push:
+    branches: [v8-production]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript
+        run: |
+          node --check app.js
+          node --check auth.js
+          node --check v8.js
+      - name: Package source
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitalveg-central-v8-source
+          path: |
+            index.html
+            styles.css
+            auth.css
+            auth.js
+            app.js
+            v8.css
+            v8.js
+            manifest.json
+            icon.svg
+            sw.js
+            netlify.toml
+            package.json
+            package-lock.json
+            netlify/functions/**
+          if-no-files-found: error
+          retention-days: 1
