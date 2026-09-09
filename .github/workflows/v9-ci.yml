@@ -17,12 +17,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate JavaScript and TypeScript syntax
+      - name: Validate frontend and backend syntax
         run: |
           node --check app.js
           node --check auth.js
+          node --check v9/v9.js
+          node --check v9/print.js
           for f in netlify/functions/*.mts; do
             node --experimental-strip-types --check "$f"
           done
-      - name: Test deterministic order rules
-        run: node --experimental-strip-types --test tests/order-engine.test.mts
+      - name: Test deterministic business rules
+        run: node --experimental-strip-types --test tests/*.test.mts
