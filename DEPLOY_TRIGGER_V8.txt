@@ -1,1 +1,1 @@
-Deploy Central VitalVeg V8.2 production — 2026-09-09 — operação por dias 3a 5a sábado
+Deploy Central VitalVeg V8.3 production — 2026-09-09 — inteligência temporal e histórico correto
