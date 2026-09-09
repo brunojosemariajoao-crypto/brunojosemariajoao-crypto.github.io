@@ -1,4 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
+import { verifyAppSession } from "./app-auth-core.mts";
 import { listActivity, listOrders, listQueue, getAutonomyPolicy } from "./ai-store.mts";
 
 function json(body:any,status=200){return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});}
@@ -10,6 +11,7 @@ function localDateKey(date=new Date()){
 
 export default async (req:Request, context:Context)=>{
   if(req.method!=="GET")return json({error:"Método não permitido"},405);
+  if(!verifyAppSession(req))return json({error:"Sessão VitalVeg não autorizada"},401);
   try{
     const [orders,queue,activity,policy]=await Promise.all([listOrders(),listQueue("open"),listActivity(),getAutonomyPolicy()]);
     const today=localDateKey();
