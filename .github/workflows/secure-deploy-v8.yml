@@ -28,6 +28,7 @@ jobs:
           node --check app.js
           node --check auth.js
           node --check v8.js
+          node --check v8-hotfix.js
 
       - name: Prepare clean deploy directory
         run: |
@@ -35,7 +36,7 @@ jobs:
           DEST=/tmp/vitalveg-v8-deploy
           rm -rf "$DEST"
           mkdir -p "$DEST/netlify/functions"
-          cp index.html styles.css auth.css auth.js app.js v8.css v8.js manifest.json icon.svg sw.js netlify.toml package.json package-lock.json "$DEST/"
+          cp index.html styles.css auth.css auth.js app.js v8.css v8.js v8-hotfix.css v8-hotfix.js manifest.json icon.svg sw.js netlify.toml package.json package-lock.json "$DEST/"
           cp netlify/functions/mail.mts netlify/functions/send.mts "$DEST/netlify/functions/"
           echo "$DEST" > /tmp/deploy-dir.txt
 
