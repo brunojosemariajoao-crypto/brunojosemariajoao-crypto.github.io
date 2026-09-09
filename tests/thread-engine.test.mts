@@ -1,0 +1,27 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildMailThreads } from "../netlify/functions/thread-engine.mts";
+
+const incoming=(id:string,date:string,subject="Encomenda")=>({id,messageId:`<${id}@cliente>`,date,direction:"in" as const,from:"Loja <loja@example.com>",to:"geral@vitalveg.pt",subject,text:"1 cx alface"});
+
+test("encomendas semanais com o mesmo assunto não são fundidas",()=>{
+  const threads=buildMailThreads([
+    incoming("m1","2026-09-07T09:00:00Z"),
+    incoming("m2","2026-09-14T09:00:00Z")
+  ]);
+  assert.equal(threads.length,2);
+});
+
+test("In-Reply-To mantém uma conversa ligada mesmo após vários dias",()=>{
+  const first=incoming("m1","2026-09-07T09:00:00Z");
+  const reply={id:"m2",messageId:"<m2@cliente>",inReplyTo:"<m1@cliente>",references:["<m1@cliente>"],date:"2026-09-14T09:00:00Z",direction:"in" as const,from:"Loja <loja@example.com>",to:"geral@vitalveg.pt",subject:"Re: Encomenda",text:"Afinal acrescentem 2 molhos de salsa"};
+  const threads=buildMailThreads([first,reply]);
+  assert.equal(threads.length,1);assert.equal(threads[0].messages.length,2);
+});
+
+test("resposta VitalVeg próxima entra na mesma conversa",()=>{
+  const first=incoming("m1","2026-09-07T09:00:00Z");
+  const sent={id:"s1",messageId:"<s1@vitalveg>",date:"2026-09-07T09:10:00Z",direction:"out" as const,from:"geral@vitalveg.pt",to:"Loja <loja@example.com>",subject:"Re: Encomenda",text:"Confirmamos a receção."};
+  const threads=buildMailThreads([first,sent]);
+  assert.equal(threads.length,1);assert.equal(threads[0].messages.length,2);
+});
