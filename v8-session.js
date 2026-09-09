@@ -1,7 +1,18 @@
-/* Central VitalVeg V8.4 — uma só autenticação e sessão persistente do email */
+/* Central VitalVeg V8.5 — uma só autenticação, sessão persistente e parser genérico */
 (() => {
   const ACCOUNT='geral@vitalveg.pt';
   let installed=false;
+
+  function loadOnce(src,marker){
+    return new Promise(resolve=>{
+      const existing=document.querySelector(`script[${marker}]`);
+      if(existing){ if(existing.dataset.loaded==='1') return resolve(); existing.addEventListener('load',resolve,{once:true}); return; }
+      const s=document.createElement('script');s.src=src;s.async=false;s.setAttribute(marker,'1');
+      s.addEventListener('load',()=>{s.dataset.loaded='1';resolve();},{once:true});
+      s.addEventListener('error',()=>resolve(),{once:true});
+      document.body.appendChild(s);
+    });
+  }
 
   function applyMail(data){
     if(!data||!Array.isArray(data.messages))return;
@@ -11,10 +22,14 @@
     try{renderAllReal();}catch{}
   }
 
-  function install(){
+  async function install(){
     if(installed)return;
     if(typeof state==='undefined'||typeof fetchRealMail!=='function'||typeof openConnectGate!=='function'||typeof sendReply!=='function'){setTimeout(install,80);return;}
     installed=true;
+
+    // Estas duas camadas têm de ficar ativas antes de reconstruir os emails.
+    await loadOnce('v8-auth-once.js?v=8.5','data-v8-auth-once-js');
+    await loadOnce('v8-generic-order-lines.js?v=8.5','data-v8-generic-order-lines-js');
 
     const baseOpenConnectGate=openConnectGate;
     openConnectGate=function(message=''){
