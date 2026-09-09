@@ -1,5 +1,5 @@
-const CACHE='vitalveg-pwa-v1';
-const ASSETS=['/','/index.html','/styles.css','/app.js','/manifest.json','/icon.svg'];
+const CACHE='vitalveg-pwa-v2';
+const ASSETS=['/','/index.html','/styles.css','/auth.css','/auth.js','/app.js','/manifest.json','/icon.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
