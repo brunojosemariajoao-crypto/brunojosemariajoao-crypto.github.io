@@ -1,4 +1,4 @@
-/* Central VitalVeg V8.7 — impressão por página real, compatível com Android */
+/* Central VitalVeg V8.8 — impressão unificada, compacta e compatível com Android */
 (() => {
   const MANUAL_KEY='vitalveg-manual-orders-v1';
   const NUMBERS_KEY='vitalveg-order-numbers-v1';
@@ -21,7 +21,7 @@
       const id=`manual:${m.id}`;
       return {id,manual:true,orderNo:m.orderNo||numberFor(id),client:m.client,order:m.order,deliveryISO:m.deliveryDate,state:'Manual'};
     });
-    return [...emails,...manual];
+    return [...emails,...manual].sort((a,b)=>(a.deliveryISO||'9999').localeCompare(b.deliveryISO||'9999')||String(a.client||'').localeCompare(String(b.client||''),'pt'));
   }
 
   function makeToken(){
@@ -39,8 +39,9 @@
     const token=makeToken();
     const key=`${PRINT_PREFIX}${token}`;
     const payload={
-      version:1,
+      version:2,
       createdAt:Date.now(),
+      compact:true,
       title,
       orders:orders.map(o=>({
         id:o.id,
@@ -55,12 +56,11 @@
 
     try{
       localStorage.setItem(key,JSON.stringify(payload));
-    }catch(err){
+    }catch{
       if(typeof showToast==='function') showToast('Não foi possível preparar a impressão.');
       return;
     }
 
-    // Uma página HTTP real evita o PDF branco que alguns Android geram ao imprimir about:blank/iframe.
     const url=`/print.html#${encodeURIComponent(token)}`;
     const w=window.open(url,'_blank');
     if(!w){
@@ -70,18 +70,39 @@
     }
   }
 
+  function activeDayFilter(){
+    const active=document.querySelector('.v8-day-filter.active');
+    return active?.getAttribute('data-filter-day')||'all';
+  }
+
   document.addEventListener('click',e=>{
     const dayBtn=e.target.closest('[data-print-day]');
     const orderBtn=e.target.closest('[data-print-order]');
-    if(!dayBtn&&!orderBtn)return;
-    e.preventDefault();e.stopImmediatePropagation();
+    const allBtn=e.target.closest('#v8PrintBtn,[data-print-all]');
+    if(!dayBtn&&!orderBtn&&!allBtn)return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
     const orders=allOrders();
+
+    if(allBtn){
+      const day=activeDayFilter();
+      if(day&&day!=='all'){
+        const selected=orders.filter(o=>o.deliveryISO===day);
+        openPrint(selected,`Encomendas para ${prettyDay(day)}`);
+      }else{
+        openPrint(orders,'Encomendas VitalVeg');
+      }
+      return;
+    }
+
     if(dayBtn){
       const day=dayBtn.getAttribute('data-print-day');
       const selected=orders.filter(o=>o.deliveryISO===day);
       openPrint(selected,`Encomendas para ${prettyDay(day)}`);
       return;
     }
+
     const id=orderBtn.getAttribute('data-print-order');
     const one=orders.find(o=>o.id===id);
     if(one)openPrint([one],`Ordem de encomenda N.º ${one.orderNo}`);
