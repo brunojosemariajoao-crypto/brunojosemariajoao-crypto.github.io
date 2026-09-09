@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Impressão VitalVeg</title>
+  <style>
+    @page{size:A4 portrait;margin:10mm}
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}
+    body{padding:16px}
+    .toolbar{position:sticky;top:0;z-index:3;display:flex;gap:10px;justify-content:center;padding:10px 0 16px;background:#fff}
+    .toolbar button{border:0;border-radius:999px;padding:12px 18px;font-weight:800;font-size:15px}
+    .print-btn{background:#0b6b3a;color:#fff}.close-btn{background:#eef2ef;color:#2f4437}
+    .pack-title{font-size:12px;color:#555;margin:0 auto 10px;max-width:800px}
+    .sheet{max-width:800px;margin:0 auto 24px;background:#fff;padding:10mm;box-shadow:0 2px 16px #ddd;page-break-after:always}
+    .sheet:last-child{page-break-after:auto}
+    header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:12px}
+    .brand{font-size:18px;font-weight:900;color:#0b6b3a;margin-bottom:3px}
+    h1{font-size:17px;margin:0}.date{text-align:right}.date span,.client span{display:block;font-size:9px;font-weight:700;color:#666;letter-spacing:.06em}.date strong{display:block;font-size:13px;margin-top:4px}
+    .client{border:1px solid #aaa;padding:9px 10px;margin-bottom:10px}.client strong{display:block;font-size:15px;margin-top:3px}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #999;padding:8px;text-align:left;vertical-align:top}th{background:#f1f1f1;font-size:10px}.check{width:70px;text-align:center;font-size:20px}
+    footer{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #aaa;margin-top:12px;padding-top:7px;font-size:9px;color:#555}
+    .error{max-width:700px;margin:60px auto;text-align:center;padding:24px;border:1px solid #ddd;border-radius:18px}.error h1{font-size:22px;margin-bottom:10px}.error p{color:#666;line-height:1.5}
+    @media(max-width:640px){body{padding:8px}.sheet{padding:6mm;box-shadow:none}.toolbar{padding-top:6px}.date strong{font-size:11px}h1{font-size:15px}footer{display:block}.client{margin-top:4px}}
+    @media print{
+      body{padding:0}.toolbar{display:none!important}.pack-title{display:none}.sheet{max-width:none;margin:0;padding:0;box-shadow:none}.sheet{page-break-after:always}.sheet:last-child{page-break-after:auto}
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    (()=>{
+      const PREFIX='vitalveg-print-job:';
+      const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const lines=text=>String(text||'').split(/\n|·/).map(x=>x.trim()).filter(Boolean);
+      const prettyDay=s=>{const d=s?new Date(`${s}T12:00:00`):null;return d&&!Number.isNaN(d.getTime())?new Intl.DateTimeFormat('pt-PT',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}).format(d):'Sem data';};
+      const token=decodeURIComponent(location.hash.slice(1));
+      const key=PREFIX+token;
+      let payload=null;
+      try{payload=JSON.parse(localStorage.getItem(key)||'null');}catch{}
+      const app=document.getElementById('app');
+      if(!payload?.orders?.length){
+        app.innerHTML='<div class="error"><h1>Não foi possível carregar a folha</h1><p>Volta à Central VitalVeg e carrega novamente em “Imprimir encomendas do dia”.</p></div>';
+        return;
+      }
+      const sheets=payload.orders.map(o=>{
+        const rows=lines(o.order||'Pedido por rever');
+        return `<article class="sheet"><header><div><div class="brand">VitalVeg</div><h1>ORDEM DE ENCOMENDA N.º ${esc(o.orderNo)}</h1></div><div class="date"><span>DATA PARA ENTREGA</span><strong>${esc(prettyDay(o.deliveryISO))}</strong></div></header><section class="client"><span>CLIENTE</span><strong>${esc(o.client||'Cliente')}</strong></section><table><thead><tr><th>QUANTIDADE / PRODUTO</th><th>CONFERIDO</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r)}</td><td class="check">☐</td></tr>`).join('')||'<tr><td>Pedido por rever</td><td class="check">☐</td></tr>'}</tbody></table><footer><span>Origem: ${o.manual?'Encomenda manual':'Email VitalVeg'}</span><span>Preparação: ☐ &nbsp;&nbsp; Carga: ☐ &nbsp;&nbsp; Entregue: ☐</span></footer></article>`;
+      }).join('');
+      app.innerHTML=`<div class="toolbar"><button class="print-btn" id="printNow">Imprimir agora</button><button class="close-btn" id="closeNow">Fechar</button></div><div class="pack-title">${esc(payload.title||'Encomendas VitalVeg')}</div>${sheets}`;
+      document.getElementById('printNow').addEventListener('click',()=>window.print());
+      document.getElementById('closeNow').addEventListener('click',()=>window.close());
+      // Espera por duas pinturas reais antes de abrir a pré-visualização do Android.
+      requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>window.print(),900)));
+      addEventListener('afterprint',()=>{setTimeout(()=>{try{localStorage.removeItem(key);}catch{}},60000);},{once:true});
+    })();
+  </script>
+</body>
+</html>
