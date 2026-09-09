@@ -139,30 +139,46 @@
     document.head.appendChild(link);
   }
 
+  function loadScript(src, marker, onload){
+    const existing=document.querySelector(`script[${marker}]`);
+    if(existing){
+      if(onload) existing.addEventListener('load', onload, {once:true});
+      else if(onload) onload();
+      return existing;
+    }
+    const script=document.createElement('script');
+    script.src=src;
+    script.async=false;
+    script.setAttribute(marker,'1');
+    if(onload) script.addEventListener('load', onload, {once:true});
+    document.body.appendChild(script);
+    return script;
+  }
+
+  function loadOpsLayer(){
+    addCss('v8-ops.css?v=8.2','data-v8-ops-css');
+    const loadOps=()=>loadScript('v8-ops.js?v=8.2','data-v8-ops-js');
+    const existing=document.querySelector('script[data-v8-delivery-js]');
+    if(existing){ loadOps(); return; }
+    loadScript('v8-delivery-fix.js?v=8.2','data-v8-delivery-js',loadOps);
+  }
+
   function loadHotfix(){
-    addCss('v8-hotfix.css?v=8.1','data-v8-hotfix-css');
-    if(document.querySelector('script[data-v8-hotfix-js]')) return;
-    const hot=document.createElement('script');
-    hot.src='v8-hotfix.js?v=8.1';
-    hot.async=false;
-    hot.dataset.v8HotfixJs='1';
-    document.body.appendChild(hot);
+    addCss('v8-hotfix.css?v=8.2','data-v8-hotfix-css');
+    const existing=document.querySelector('script[data-v8-hotfix-js]');
+    if(existing){ loadOpsLayer(); return; }
+    loadScript('v8-hotfix.js?v=8.2','data-v8-hotfix-js',loadOpsLayer);
   }
 
   function loadV8Layer(){
-    addCss('v8.css?v=8.1','data-v8-css');
+    addCss('v8.css?v=8.2','data-v8-css');
     const existing=document.querySelector('script[data-v8-js]');
     if(existing){
       if(window.VITALVEG_VERSION) loadHotfix();
       else existing.addEventListener('load', loadHotfix, {once:true});
       return;
     }
-    const script=document.createElement('script');
-    script.src='v8.js?v=8.1';
-    script.async=false;
-    script.dataset.v8Js='1';
-    script.addEventListener('load', loadHotfix, {once:true});
-    document.body.appendChild(script);
+    loadScript('v8.js?v=8.2','data-v8-js',loadHotfix);
   }
 
   window.addEventListener('load', loadV8Layer, { once:true });
