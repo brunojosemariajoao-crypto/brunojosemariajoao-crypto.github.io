@@ -1,0 +1,12 @@
+/* Central VitalVeg V8 — mobile navigation + manual treatment */
+.v8-manual-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:0 24px 22px}.v8-manual-actions span{font-size:11px;line-height:1.4;color:#68766e}.v8-treated-btn{border-color:#b9dcc7!important;background:#f2fbf5!important;color:#0d7440!important;font-weight:800!important}
+@media(max-width:820px){
+  .mobile-nav{bottom:88px!important;z-index:120!important}
+  .main{padding-bottom:182px!important}
+  .toast{bottom:170px!important}
+  .v8-manual-actions{padding-left:18px;padding-right:18px}
+}
+@media(max-width:520px){
+  .mobile-nav{left:8px!important;right:8px!important;bottom:88px!important}
+  .v8-manual-actions{display:grid}.v8-manual-actions button{width:100%}
+}
