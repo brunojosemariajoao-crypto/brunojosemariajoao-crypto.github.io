@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
@@ -13,13 +13,20 @@ const FINAL_MESSAGE_LIMIT = 20;
 const SECURE_STORE = "vitalveg-secure";
 const CONFIG_KEY = "mailbox-config-v1";
 const CACHE_KEY = "mail-cache-v1";
+const ACCESS_KEY = "central-access-v1";
 
 function store(){ return getStore(SECURE_STORE,{consistency:"strong"}); }
 function hash(value:string){ return createHash("sha256").update(value).digest("hex"); }
-function cryptoKey(){
+function bootstrapSecret(){
   const bootstrap = Netlify.env.get("BOOTSTRAP_CODE");
   if(!bootstrap) throw new Error("BOOTSTRAP_CODE em falta no servidor");
-  return createHash("sha256").update(`vitalveg-mailbox-v1:${bootstrap}`).digest();
+  return bootstrap;
+}
+function cryptoKey(){
+  return createHash("sha256").update(`vitalveg-mailbox-v1:${bootstrapSecret()}`).digest();
+}
+function accessVerifier(pinHash:string){
+  return createHmac("sha256",bootstrapSecret()).update(`vitalveg-central-access-v1:${pinHash}`).digest("hex");
 }
 
 export function encryptPassword(password:string){
@@ -43,6 +50,12 @@ export async function saveMailboxConfig(email:string,password:string,deviceToken
   const value={account:email,secret:encryptPassword(password),deviceTokenHashes:hashes,updatedAt:new Date().toISOString()};
   await store().setJSON(CONFIG_KEY,value);
 }
+export async function addDeviceToken(deviceToken:string){
+  const cfg=await getMailboxConfig();
+  if(!cfg?.account||!cfg?.secret) throw new Error("Caixa de email ainda não configurada");
+  const hashes=Array.from(new Set([...(cfg.deviceTokenHashes||[]),hash(deviceToken)]));
+  await store().setJSON(CONFIG_KEY,{...cfg,deviceTokenHashes:hashes,updatedAt:new Date().toISOString()});
+}
 export async function verifyDeviceToken(token:string){
   if(!token) return false;
   const cfg=await getMailboxConfig();
@@ -52,6 +65,31 @@ export async function getStoredCredentials(){
   const cfg=await getMailboxConfig();
   if(!cfg?.account||!cfg?.secret) throw new Error("Caixa de email ainda não configurada");
   return {email:String(cfg.account),password:decryptPassword(cfg.secret)};
+}
+
+export async function accessConfigured(){
+  const cfg=await store().get(ACCESS_KEY,{type:"json"}) as any;
+  return !!cfg?.verifier;
+}
+export async function bootstrapAccessPin(pinHash:string){
+  if(!/^[a-f0-9]{64}$/i.test(pinHash)) throw new Error("PIN inválido");
+  const existing=await store().get(ACCESS_KEY,{type:"json"}) as any;
+  const verifier=accessVerifier(pinHash.toLowerCase());
+  if(existing?.verifier){
+    const a=Buffer.from(String(existing.verifier),"hex");
+    const b=Buffer.from(verifier,"hex");
+    if(a.length!==b.length||!timingSafeEqual(a,b)) throw new Error("PIN da Central diferente");
+    return;
+  }
+  await store().setJSON(ACCESS_KEY,{verifier,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+}
+export async function verifyAccessPinHash(pinHash:string){
+  if(!/^[a-f0-9]{64}$/i.test(pinHash)) return false;
+  const cfg=await store().get(ACCESS_KEY,{type:"json"}) as any;
+  if(!cfg?.verifier) return false;
+  const expected=Buffer.from(String(cfg.verifier),"hex");
+  const actual=Buffer.from(accessVerifier(pinHash.toLowerCase()),"hex");
+  return expected.length===actual.length&&timingSafeEqual(expected,actual);
 }
 
 export async function validateCredentials(email:string,password:string){
