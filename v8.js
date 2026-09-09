@@ -338,10 +338,13 @@
   migrateDeliveryDefaults();
   exposeDiagnostics();
 
-  document.addEventListener('DOMContentLoaded', () => {
+  function bootV8Ui() {
     installV8Status();
     updateV8Toolbar();
     hardenSettingsCopy();
-    setTimeout(() => { try { renderAllReal(); } catch {} }, 500);
-  });
+    setTimeout(() => { try { renderAllReal(); } catch {} }, 250);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootV8Ui);
+  else bootV8Ui();
 })();
