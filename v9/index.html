@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0c3b2e">
+  <title>Central VitalVeg · Funcionário Digital</title>
+  <link rel="stylesheet" href="./v9.css">
+</head>
+<body>
+  <div id="authGate" class="auth-gate" hidden>
+    <div class="auth-card">
+      <div class="brand-lockup">
+        <img id="authOriginalLogo" class="original-logo" alt="VitalVeg" hidden>
+        <div class="brand-fallback"><strong>VitalVeg</strong><span>Central Inteligente</span></div>
+      </div>
+      <div class="eyebrow">ACESSO SEGURO</div>
+      <h1 id="authTitle">Entrar</h1>
+      <p id="authCopy">Introduz o PIN da Central VitalVeg.</p>
+      <label class="field"><span>PIN</span><input id="pinInput" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" placeholder="••••"></label>
+      <button id="authSubmit" class="btn primary wide">Entrar</button>
+      <p id="authError" class="form-error" role="alert"></p>
+      <p class="fine-print">O PIN autoriza este dispositivo. A palavra-passe do email permanece guardada no servidor e não é pedida em cada abertura.</p>
+    </div>
+  </div>
+
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img id="sidebarOriginalLogo" class="original-logo" alt="VitalVeg" hidden>
+        <div class="brand-fallback"><strong>VitalVeg</strong><span>Funcionário Digital</span></div>
+      </div>
+      <nav id="mainNav" class="main-nav" aria-label="Navegação principal">
+        <button data-view="today" class="active"><span class="nav-mark">01</span><span>Hoje</span></button>
+        <button data-view="deliveries"><span class="nav-mark">02</span><span>Entregas</span></button>
+        <button data-view="needs"><span class="nav-mark">03</span><span>Precisa de mim</span><b id="needsBadge" class="count-badge" hidden>0</b></button>
+        <button data-view="orders"><span class="nav-mark">04</span><span>Encomendas</span></button>
+        <button data-view="customers"><span class="nav-mark">05</span><span>Clientes</span></button>
+        <button data-view="activity"><span class="nav-mark">06</span><span>Atividade IA</span></button>
+        <button data-view="emails"><span class="nav-mark">07</span><span>Emails / Histórico</span></button>
+        <button data-view="autonomy"><span class="nav-mark">08</span><span>Regras e autonomia</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="system-mini"><span id="miniAiDot" class="status-dot"></span><div><strong id="miniAiStatus">IA a verificar</strong><small id="miniSync">A iniciar…</small></div></div>
+        <button id="logoutBtn" class="text-btn">Terminar sessão</button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button id="mobileMenuBtn" class="mobile-menu" aria-label="Abrir menu">☰</button>
+        <div class="topbar-title"><small id="viewEyebrow">CENTRO DE OPERAÇÕES</small><h1 id="viewTitle">Hoje</h1></div>
+        <div class="topbar-actions">
+          <label class="search-box"><span>⌕</span><input id="globalSearch" type="search" placeholder="Cliente, artigo, ordem…"></label>
+          <button id="refreshBtn" class="icon-btn" title="Atualizar">↻</button>
+          <button id="newOrderBtn" class="btn primary">+ Encomenda manual</button>
+        </div>
+      </header>
+
+      <section class="status-strip" aria-label="Estado do sistema">
+        <div><span id="aiStatusDot" class="status-dot"></span><strong>Funcionário IA</strong><span id="aiStatusText">A iniciar</span></div>
+        <div><span id="mailStatusDot" class="status-dot"></span><strong>Email</strong><span id="mailStatusText">A verificar</span></div>
+        <div><strong>Última sincronização</strong><span id="syncStatusText">—</span></div>
+        <div class="autonomy-pill"><strong>Autonomia</strong><span id="autonomyStatusText">Nível 1 · Aprovação humana</span></div>
+      </section>
+
+      <div id="content" class="content" aria-live="polite">
+        <div class="loading-state"><span class="loader"></span><p>A preparar o centro de operações…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+  <aside id="detailDrawer" class="detail-drawer" aria-hidden="true">
+    <div class="drawer-head"><div><small>DETALHE</small><h2 id="drawerTitle">Análise da IA</h2></div><button id="closeDrawer" class="icon-btn">×</button></div>
+    <div id="drawerBody" class="drawer-body"></div>
+  </aside>
+
+  <div id="modalBackdrop" class="modal-backdrop" hidden></div>
+  <div id="manualOrderModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+    <div class="modal-card wide-modal">
+      <div class="drawer-head"><div><small>REGISTO HUMANO</small><h2 id="manualTitle">Nova encomenda manual</h2></div><button data-close-modal class="icon-btn">×</button></div>
+      <form id="manualOrderForm">
+        <div class="form-grid">
+          <label class="field"><span>Cliente</span><input name="customerName" placeholder="Nome do cliente"></label>
+          <label class="field"><span>Loja / estabelecimento</span><input name="storeName" placeholder="Loja"></label>
+          <label class="field"><span>Email</span><input name="customerEmail" type="email" placeholder="cliente@exemplo.pt"></label>
+          <label class="field"><span>Data de entrega</span><input name="deliveryDate" type="date" required></label>
+        </div>
+        <div class="form-section-head"><div><h3>Artigos</h3><p>Qualquer artigo pode ser registado.</p></div><button id="addManualLine" type="button" class="btn subtle">+ Adicionar linha</button></div>
+        <div id="manualLines" class="manual-lines"></div>
+        <div class="modal-actions"><button data-close-modal type="button" class="btn ghost">Cancelar</button><button type="submit" class="btn primary">Guardar encomenda</button></div>
+        <p id="manualError" class="form-error"></p>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="./v9.js" defer></script>
+</body>
+</html>
