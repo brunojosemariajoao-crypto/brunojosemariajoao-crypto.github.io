@@ -1,0 +1,107 @@
+name: Secure Deploy Central VitalVeg V8
+
+on:
+  push:
+    branches: [v8-production]
+    paths:
+      - DEPLOY_TRIGGER_V8.txt
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v8-production
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate V8 source
+        run: |
+          node --check app.js
+          node --check auth.js
+          node --check v8.js
+
+      - name: Prepare clean deploy directory
+        run: |
+          set -euo pipefail
+          DEST=/tmp/vitalveg-v8-deploy
+          rm -rf "$DEST"
+          mkdir -p "$DEST/netlify/functions"
+          cp index.html styles.css auth.css auth.js app.js v8.css v8.js manifest.json icon.svg sw.js netlify.toml package.json package-lock.json "$DEST/"
+          cp netlify/functions/mail.mts netlify/functions/send.mts "$DEST/netlify/functions/"
+          echo "$DEST" > /tmp/deploy-dir.txt
+
+      - name: Generate one-time deployment key
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:8192 -out /tmp/deploy-private.pem 2>/dev/null
+          openssl pkey -in /tmp/deploy-private.pem -pubout -out /tmp/deploy-public.pem
+
+      - name: Publish public encryption key
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-public-key-${{ github.run_id }}
+          path: /tmp/deploy-public.pem
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Wait for encrypted Netlify authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TARGET=".deploy/proxy-${GITHUB_RUN_ID}.b64"
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${TARGET}?ref=v8-production"
+          echo "Waiting for encrypted deployment authorization for run ${GITHUB_RUN_ID}..."
+          found=0
+          for i in $(seq 1 120); do
+            if curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github.raw+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$API" -o /tmp/proxy.b64; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "Encrypted authorization was not received in time." >&2
+            exit 1
+          fi
+          base64 -d /tmp/proxy.b64 > /tmp/proxy.enc
+          openssl pkeyutl -decrypt \
+            -inkey /tmp/deploy-private.pem \
+            -in /tmp/proxy.enc \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -out /tmp/proxy.txt
+          PROXY="$(cat /tmp/proxy.txt)"
+          case "$PROXY" in
+            https://netlify-mcp.netlify.app/proxy/*) ;;
+            *) echo "Invalid deployment authorization." >&2; exit 1 ;;
+          esac
+          echo "::add-mask::$PROXY"
+          chmod 600 /tmp/proxy.txt /tmp/deploy-private.pem
+
+      - name: Deploy V8 to existing Netlify production site
+        run: |
+          set -euo pipefail
+          PROXY="$(cat /tmp/proxy.txt)"
+          cd "$(cat /tmp/deploy-dir.txt)"
+          npx -y @netlify/mcp@latest \
+            --site-id f9a17204-1189-4e33-89ef-f2ea988a4362 \
+            --proxy-path "$PROXY"
+
+      - name: Remove sensitive temporary files
+        if: always()
+        run: |
+          rm -f /tmp/proxy.txt /tmp/proxy.enc /tmp/proxy.b64 /tmp/deploy-private.pem /tmp/deploy-public.pem
