@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { cleanCurrentMailText } from "./mail-text.mts";
 
 declare const Netlify: any;
 
@@ -89,7 +90,7 @@ function compactMessages(messages:MailInput[]){
     from:m.from||"",
     to:m.to||"",
     subject:m.subject||"",
-    text:String(m.text||"").slice(0,9000)
+    text:cleanCurrentMailText(m.text||"")
   }));
 }
 
@@ -108,9 +109,8 @@ export function requestFingerprint(input:AnalysisRequest){
 
 export async function analyzeConversation(input:AnalysisRequest){
   const apiKey=Netlify.env.get("OPENAI_API_KEY");
-  const model=Netlify.env.get("OPENAI_MODEL");
+  const model=Netlify.env.get("OPENAI_MODEL")||"gpt-5.6-luna";
   if(!apiKey)throw new Error("OPENAI_API_KEY não configurada");
-  if(!model)throw new Error("OPENAI_MODEL não configurado");
 
   const messages=compactMessages(input.messages||[]);
   if(!messages.length)throw new Error("Sem mensagens para analisar");
