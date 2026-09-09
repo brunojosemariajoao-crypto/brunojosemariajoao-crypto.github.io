@@ -1,22 +1,52 @@
 import type { Context, Config } from "@netlify/functions";
-import { fetchMailbox, getCachedMail, getStoredCredentials, verifyDeviceToken } from "./mail-core.mts";
+import { randomBytes } from "node:crypto";
+import { ALLOWED_ACCOUNT, fetchMailbox, getCachedMail, getStoredCredentials, saveMailboxConfig, validateCredentials, verifyDeviceToken } from "./mail-core.mts";
 
-function bearer(req:Request){const h=req.headers.get("authorization")||"";return h.toLowerCase().startsWith("bearer ")?h.slice(7).trim():"";}
+function cookieToken(req:Request){
+  const raw=req.headers.get("cookie")||"";
+  const hit=raw.split(";").map(x=>x.trim()).find(x=>x.startsWith("vv_device="));
+  return hit?decodeURIComponent(hit.slice("vv_device=".length)):"";
+}
+function deviceCookie(token:string){return `vv_device=${encodeURIComponent(token)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Strict`;}
 
 export default async (req:Request, context:Context)=>{
   if(!["GET","POST"].includes(req.method)) return Response.json({error:"Método não permitido"},{status:405});
-  const token=bearer(req);
-  if(!(await verifyDeviceToken(token))) return Response.json({error:"Dispositivo não autorizado"},{status:401});
+
+  let token=cookieToken(req);
+  let authorized=await verifyDeviceToken(token);
+  let freshToken="";
+  let credentials:any=null;
+
+  if(req.method==="POST"&&!authorized){
+    let body:any={};try{body=await req.json();}catch{}
+    const email=String(body?.email||"").trim().toLowerCase();
+    const password=String(body?.password||"");
+    if(email===ALLOWED_ACCOUNT&&password){
+      try{
+        await validateCredentials(email,password);
+        freshToken=randomBytes(32).toString("hex");
+        await saveMailboxConfig(email,password,freshToken);
+        credentials={email,password};authorized=true;token=freshToken;
+      }catch(error:any){
+        return Response.json({error:"Falha de autenticação no email. Confirma a palavra-passe de geral@vitalveg.pt."},{status:401});
+      }
+    }
+  }
+
+  if(!authorized) return Response.json({error:"Dispositivo não autorizado"},{status:401});
 
   try{
     if(req.method==="GET"){
       const cached=await getCachedMail();
-      if(!cached) return Response.json({ok:true,cached:true,fetchedAt:null,messages:[]});
-      return Response.json({...cached,cached:true});
+      const response=Response.json(cached?{...cached,cached:true}:{ok:true,cached:true,fetchedAt:null,messages:[]});
+      if(freshToken)response.headers.set("Set-Cookie",deviceCookie(freshToken));
+      return response;
     }
-    const {email,password}=await getStoredCredentials();
-    const result=await fetchMailbox(email,password);
-    return Response.json({...result,cached:false});
+    if(!credentials)credentials=await getStoredCredentials();
+    const result=await fetchMailbox(credentials.email,credentials.password);
+    const response=Response.json({...result,cached:false});
+    if(freshToken)response.headers.set("Set-Cookie",deviceCookie(freshToken));
+    return response;
   }catch(error:any){
     const msg=String(error?.message||"Não foi possível ler o email");
     const authFailed=/auth|login|password|credentials/i.test(msg);
