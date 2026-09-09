@@ -1,5 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { analyzeConversation } from "./ai-core.mts";
+import { verifyAppSession } from "./app-auth-core.mts";
 
 function json(body:any,status=200){
   return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});
@@ -7,6 +8,7 @@ function json(body:any,status=200){
 
 export default async (req:Request, context:Context)=>{
   if(req.method!=="POST")return json({error:"Método não permitido"},405);
+  if(!verifyAppSession(req))return json({error:"Sessão VitalVeg não autorizada"},401);
   let body:any={};
   try{body=await req.json();}catch{return json({error:"Pedido inválido"},400);}
   if(!Array.isArray(body?.messages)||!body.messages.length)return json({error:"Sem mensagens para analisar"},400);
@@ -14,8 +16,8 @@ export default async (req:Request, context:Context)=>{
     const result=await analyzeConversation({
       messages:body.messages,
       knownCustomer:body.knownCustomer||null,
-      deliveryDays:Array.isArray(body.deliveryDays)?body.deliveryDays:[2,4,6],
-      cutoff:String(body.cutoff||"14:00")
+      deliveryDays:[2,4,6],
+      cutoff:"14:00"
     });
     return json({ok:true,...result});
   }catch(error:any){
