@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { verifyAppSession } from "./app-auth-core.mts";
-import { appendActivity, getQueueItem, listQueue, setQueueStatus } from "./ai-store.mts";
+import { appendActivity, getAnalysis, getOrder, getQueueItem, listQueue, setQueueStatus } from "./ai-store.mts";
 
 function json(body:any,status=200){return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});}
 
@@ -9,7 +9,15 @@ export default async (req:Request, context:Context)=>{
   if(req.method==="GET"){
     const url=new URL(req.url);
     const id=String(url.searchParams.get("id")||"").trim();
-    if(id){const item=await getQueueItem(id);return item?json({ok:true,item}):json({error:"Pedido não encontrado"},404);}
+    if(id){
+      const item=await getQueueItem(id);
+      if(!item)return json({error:"Pedido não encontrado"},404);
+      const [stored,order]=await Promise.all([
+        getAnalysis(item.analysisFingerprint),
+        item.orderId?getOrder(item.orderId):Promise.resolve(null)
+      ]);
+      return json({ok:true,item,analysis:(stored as any)?.analysis||null,order});
+    }
     return json({ok:true,items:await listQueue(String(url.searchParams.get("status")||"open"))});
   }
   if(req.method!=="POST")return json({error:"Método não permitido"},405);
