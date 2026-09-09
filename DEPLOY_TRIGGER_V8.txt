@@ -1,1 +1,1 @@
-Deploy Central VitalVeg V8.4 production — 2026-09-09 — sessão única, email persistente e sync em segundo plano
+Deploy Central VitalVeg V8.5 production — 2026-09-09 — parser genérico, PIN único por entrada e impressão móvel corrigida
