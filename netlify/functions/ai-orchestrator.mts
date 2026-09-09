@@ -3,9 +3,10 @@ import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
 import { consolidateOrder, resolveDeliveryDate, type AiAnalysis, type OrderEvent, type OrderRecord } from "./order-engine.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
 import { executeManagedSend } from "./managed-send-core.mts";
+import { sendPushToOperators } from "./push-core.mts";
 import {
   appendActivity, findOpenOrderForCustomer, getAnalysis, getAutonomyPolicy,
-  getOrder, getProcessedResult, getThreadOrderId, saveAnalysis, saveOrder,
+  getOrder, getProcessedResult, getQueueItem, getThreadOrderId, saveAnalysis, saveOrder,
   saveProcessedResult, saveThreadOrderId, upsertQueueItem
 } from "./ai-store.mts";
 
@@ -71,14 +72,17 @@ export async function processConversation(input:ProcessConversationInput){
   const policy=await getAutonomyPolicy();
   const autonomy=decideAutonomy(analysis,order,policy);
   let queueItem:any=null;
+  let queueCreated=false;
   let autoSend:any=null;
   let autoSendError:string|null=null;
 
   if(["review","await_approval","auto_execute"].includes(autonomy.mode)){
     const to=analysis.customerEmail||cleanAddress(String(latest?.from||""))||null;
     const references=[...(Array.isArray(latest?.references)?latest.references:[]),latest?.messageId].filter(Boolean).map(String);
+    const id=queueId(threadKey,fingerprint);
+    queueCreated=!(await getQueueItem(id));
     queueItem=await upsertQueueItem({
-      id:queueId(threadKey,fingerprint),
+      id,
       threadKey,
       orderId:order?.id||null,
       kind:autonomy.mode==="review"?"review":"approval",
@@ -121,6 +125,19 @@ export async function processConversation(input:ProcessConversationInput){
     }
   }
 
+  if(queueCreated && queueItem && !autoSend){
+    try{
+      await sendPushToOperators({
+        title:queueItem.kind==="review"?"VitalVeg · Precisa de ti":"VitalVeg · Resposta pronta",
+        body:`${queueItem.title}: ${queueItem.summary}`.slice(0,180),
+        url:`/v9/?open=${encodeURIComponent(queueItem.id)}`,
+        tag:queueItem.id
+      });
+    }catch(error:any){
+      await appendActivity("push_failed",{queueItemId:queueItem.id,error:String(error?.message||error)});
+    }
+  }
+
   const deliveryPreview=analysis.orderAction==="create"?resolveDeliveryDate(receivedAt,analysis.deliveryDateExplicit):null;
   const result={
     ok:true,
@@ -128,6 +145,7 @@ export async function processConversation(input:ProcessConversationInput){
     order,
     autonomy,
     queueItem,
+    queueCreated,
     autoSend,
     autoSendError,
     deliveryPreview,
