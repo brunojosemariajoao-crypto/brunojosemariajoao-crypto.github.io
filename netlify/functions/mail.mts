@@ -1,6 +1,7 @@
 import type { Context, Config } from "@netlify/functions";
 import { randomBytes } from "node:crypto";
 import { ALLOWED_ACCOUNT, fetchMailbox, getCachedMail, getStoredCredentials, saveMailboxConfig, validateCredentials, verifyDeviceToken } from "./mail-core.mts";
+import { verifyAppSession } from "./app-auth-core.mts";
 
 function cookieToken(req:Request){
   const raw=req.headers.get("cookie")||"";
@@ -10,10 +11,12 @@ function cookieToken(req:Request){
 function deviceCookie(token:string){return `vv_device=${encodeURIComponent(token)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Strict`;}
 
 export default async (req:Request, context:Context)=>{
-  if(!["GET","POST"].includes(req.method)) return Response.json({error:"Método não permitido"},{status:405});
+  if(!["GET","POST"].includes(req.method))return Response.json({error:"Método não permitido"},{status:405});
 
   let token=cookieToken(req);
-  let authorized=await verifyDeviceToken(token);
+  let legacyAuthorized=await verifyDeviceToken(token);
+  const sessionAuthorized=verifyAppSession(req);
+  let authorized=legacyAuthorized||sessionAuthorized;
   let freshToken="";
   let credentials:any=null;
 
@@ -26,14 +29,14 @@ export default async (req:Request, context:Context)=>{
         await validateCredentials(email,password);
         freshToken=randomBytes(32).toString("hex");
         await saveMailboxConfig(email,password,freshToken);
-        credentials={email,password};authorized=true;token=freshToken;
-      }catch(error:any){
+        credentials={email,password};authorized=true;legacyAuthorized=true;token=freshToken;
+      }catch{
         return Response.json({error:"Falha de autenticação no email. Confirma a palavra-passe de geral@vitalveg.pt."},{status:401});
       }
     }
   }
 
-  if(!authorized) return Response.json({error:"Dispositivo não autorizado"},{status:401});
+  if(!authorized)return Response.json({error:"Acesso VitalVeg não autorizado"},{status:401});
 
   try{
     if(req.method==="GET"){
