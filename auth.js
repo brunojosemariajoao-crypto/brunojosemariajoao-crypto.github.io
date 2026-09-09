@@ -142,43 +142,47 @@
   function loadScript(src, marker, onload){
     const existing=document.querySelector(`script[${marker}]`);
     if(existing){
-      if(onload) existing.addEventListener('load', onload, {once:true});
-      else if(onload) onload();
+      if(onload){
+        if(existing.dataset.loaded==='1') onload();
+        else existing.addEventListener('load', onload, {once:true});
+      }
       return existing;
     }
     const script=document.createElement('script');
     script.src=src;
     script.async=false;
     script.setAttribute(marker,'1');
+    script.addEventListener('load',()=>{script.dataset.loaded='1';});
     if(onload) script.addEventListener('load', onload, {once:true});
     document.body.appendChild(script);
     return script;
   }
 
   function loadOpsLayer(){
-    addCss('v8-ops.css?v=8.2','data-v8-ops-css');
-    const loadOps=()=>loadScript('v8-ops.js?v=8.2','data-v8-ops-js');
+    addCss('v8-ops.css?v=8.3','data-v8-ops-css');
+    const loadOps=()=>loadScript('v8-ops.js?v=8.3','data-v8-ops-js');
+    const loadIntelligence=()=>loadScript('v8-order-intelligence.js?v=8.3','data-v8-order-intelligence-js',loadOps);
     const existing=document.querySelector('script[data-v8-delivery-js]');
-    if(existing){ loadOps(); return; }
-    loadScript('v8-delivery-fix.js?v=8.2','data-v8-delivery-js',loadOps);
+    if(existing){ loadIntelligence(); return; }
+    loadScript('v8-delivery-fix.js?v=8.3','data-v8-delivery-js',loadIntelligence);
   }
 
   function loadHotfix(){
-    addCss('v8-hotfix.css?v=8.2','data-v8-hotfix-css');
+    addCss('v8-hotfix.css?v=8.3','data-v8-hotfix-css');
     const existing=document.querySelector('script[data-v8-hotfix-js]');
     if(existing){ loadOpsLayer(); return; }
-    loadScript('v8-hotfix.js?v=8.2','data-v8-hotfix-js',loadOpsLayer);
+    loadScript('v8-hotfix.js?v=8.3','data-v8-hotfix-js',loadOpsLayer);
   }
 
   function loadV8Layer(){
-    addCss('v8.css?v=8.2','data-v8-css');
+    addCss('v8.css?v=8.3','data-v8-css');
     const existing=document.querySelector('script[data-v8-js]');
     if(existing){
       if(window.VITALVEG_VERSION) loadHotfix();
       else existing.addEventListener('load', loadHotfix, {once:true});
       return;
     }
-    loadScript('v8.js?v=8.2','data-v8-js',loadHotfix);
+    loadScript('v8.js?v=8.3','data-v8-js',loadHotfix);
   }
 
   window.addEventListener('load', loadV8Layer, { once:true });
