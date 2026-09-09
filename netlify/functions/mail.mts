@@ -5,6 +5,8 @@ import { simpleParser } from "mailparser";
 const IMAP_HOST = "mail.securemail.pro";
 const IMAP_PORT = 993;
 const ALLOWED_ACCOUNT = "geral@vitalveg.pt";
+const FETCH_LIMIT_PER_FOLDER = 20;
+const FINAL_MESSAGE_LIMIT = 20;
 
 function cleanAddress(value: any): string {
   if (!value) return "";
@@ -50,11 +52,11 @@ async function fetchFolder(client: ImapFlow, folder: string, limit: number, dire
           inReplyTo: String(parsed.inReplyTo || ""),
           references: Array.isArray(parsed.references) ? parsed.references : (parsed.references ? [parsed.references] : []),
           text: String(parsed.text || "").trim(),
-          html: parsed.html ? String(parsed.html) : "",
+          html: "",
           flags: Array.from(msg.flags || []).map(String)
         });
       } catch {
-        // Ignorar mensagens individuais que não consigam ser analisadas.
+        // Uma mensagem malformada não deve bloquear a sincronização inteira.
       }
     }
   } finally {
@@ -77,7 +79,6 @@ export default async (req: Request, context: Context) => {
 
   const user = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "");
-  const limit = Math.min(120, Math.max(20, Number(body?.limit || 60)));
 
   if (!user || !password) {
     return Response.json({ error: "Email e palavra-passe são obrigatórios" }, { status: 400 });
@@ -92,28 +93,45 @@ export default async (req: Request, context: Context) => {
     secure: true,
     auth: { user, pass: password },
     logger: false,
-    connectionTimeout: 12000,
-    greetingTimeout: 12000,
-    socketTimeout: 25000
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
   });
 
   try {
     await client.connect();
-    const inbox = await fetchFolder(client, "INBOX", limit, "in");
-    const sentFolder = await findSentFolder(client);
-    const sent = sentFolder ? await fetchFolder(client, sentFolder, limit, "out") : [];
-    const messages = [...inbox, ...sent].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const inbox = await fetchFolder(client, "INBOX", FETCH_LIMIT_PER_FOLDER, "in");
+    let sentFolder: string | null = null;
+    let sent: any[] = [];
+    let sentWarning = "";
+
+    try {
+      sentFolder = await findSentFolder(client);
+      if (sentFolder) sent = await fetchFolder(client, sentFolder, FETCH_LIMIT_PER_FOLDER, "out");
+    } catch (error: any) {
+      sentWarning = String(error?.message || "Não foi possível ler a pasta Enviados");
+    }
+
+    const messages = [...inbox, ...sent]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, FINAL_MESSAGE_LIMIT);
 
     return Response.json({
       ok: true,
       account: user,
       sentFolder,
+      sentWarning,
       fetchedAt: new Date().toISOString(),
+      limits: { inbox: FETCH_LIMIT_PER_FOLDER, sent: FETCH_LIMIT_PER_FOLDER, returned: FINAL_MESSAGE_LIMIT },
       messages
     });
   } catch (error: any) {
-    const text = String(error?.authenticationFailed ? "Falha de autenticação" : error?.message || "Não foi possível ligar ao email");
-    return Response.json({ error: text }, { status: 401 });
+    const authFailed = Boolean(error?.authenticationFailed) || /auth|login|password|credentials/i.test(String(error?.message || ""));
+    const text = authFailed
+      ? "Falha de autenticação no email. Confirma a palavra-passe da caixa geral@vitalveg.pt."
+      : `Erro IMAP: ${String(error?.message || "Não foi possível ligar ao servidor de email")}`;
+    return Response.json({ error: text }, { status: authFailed ? 401 : 502 });
   } finally {
     try { await client.logout(); } catch {}
   }
