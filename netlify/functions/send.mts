@@ -4,12 +4,11 @@ import { ALLOWED_ACCOUNT, getStoredCredentials, verifyDeviceToken } from "./mail
 
 const SMTP_HOST="smtp.securemail.pro";
 const SMTP_PORT=465;
-function bearer(req:Request){const h=req.headers.get("authorization")||"";return h.toLowerCase().startsWith("bearer ")?h.slice(7).trim():"";}
+function cookieToken(req:Request){const raw=req.headers.get("cookie")||"";const hit=raw.split(";").map(x=>x.trim()).find(x=>x.startsWith("vv_device="));return hit?decodeURIComponent(hit.slice("vv_device=".length)):"";}
 
 export default async (req:Request, context:Context)=>{
   if(req.method!=="POST") return Response.json({error:"Método não permitido"},{status:405});
-  const token=bearer(req);
-  if(!(await verifyDeviceToken(token))) return Response.json({error:"Dispositivo não autorizado"},{status:401});
+  if(!(await verifyDeviceToken(cookieToken(req)))) return Response.json({error:"Dispositivo não autorizado"},{status:401});
 
   let body:any={};try{body=await req.json();}catch{return Response.json({error:"Pedido inválido"},{status:400});}
   const to=String(body?.to||"").trim(); const subject=String(body?.subject||"").trim(); const text=String(body?.text||"").trim();
