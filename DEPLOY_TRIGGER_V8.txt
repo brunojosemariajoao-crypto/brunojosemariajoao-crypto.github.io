@@ -1,1 +1,1 @@
-Deploy Central VitalVeg V8.5c production — 2026-09-09 — parser genérico, PIN único, impressão corrigida e cópia automática em Enviados
+Deploy Central VitalVeg V8.6 production — 2026-09-09 — login com um único PIN e dispositivo memorizado
