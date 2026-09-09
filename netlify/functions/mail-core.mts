@@ -17,9 +17,9 @@ const CACHE_KEY = "mail-cache-v1";
 function store(){ return getStore(SECURE_STORE,{consistency:"strong"}); }
 function hash(value:string){ return createHash("sha256").update(value).digest("hex"); }
 function cryptoKey(){
-  const secret = Netlify.env.get("VAULT_KEY") || Netlify.env.get("BOOTSTRAP_CODE");
-  if(!secret) throw new Error("Chave segura em falta no servidor");
-  return createHash("sha256").update(`vitalveg-mailbox-v1:${secret}`).digest();
+  const bootstrap = Netlify.env.get("BOOTSTRAP_CODE");
+  if(!bootstrap) throw new Error("BOOTSTRAP_CODE em falta no servidor");
+  return createHash("sha256").update(`vitalveg-mailbox-v1:${bootstrap}`).digest();
 }
 
 export function encryptPassword(password:string){
