@@ -7,9 +7,10 @@
   <meta name="description" content="Central VitalVeg — gestão inteligente de encomendas, conversas e entregas." />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="auth.css" />
   <title>Central VitalVeg</title>
 </head>
-<body>
+<body class="auth-pending">
   <div id="appShell" class="app-shell">
     <aside class="sidebar">
       <div class="brand brand--desktop" aria-label="VitalVeg">
@@ -52,6 +53,7 @@
           <span class="search-icon">⌕</span>
           <input id="searchInput" type="search" placeholder="Pesquisar cliente, produto ou conversa…" />
         </div>
+        <button id="installAppBtn" class="install-app-button" type="button" aria-label="Instalar aplicação">⇩ <span>Instalar app</span></button>
         <button class="profile-button" aria-label="Perfil"><span>BS</span></button>
       </header>
 
@@ -142,7 +144,29 @@
     </nav>
   </div>
 
+  <div id="authGate" class="auth-gate" aria-modal="true" role="dialog">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M31 44C17 39 12 27 15 14c13 3 23 13 16 30Z" fill="#36b95f"/>
+          <path d="M33 43C31 27 38 13 52 8c5 14-2 29-19 35Z" fill="#49cb68"/>
+          <path d="M31 44c-3-11-7-20-14-27M33 43c4-12 10-22 18-31" fill="none" stroke="#128449" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div class="auth-brand-copy"><strong>VitalVeg</strong><small>CENTRAL DE COMUNICAÇÕES</small></div>
+      </div>
+      <h1 id="authTitle">Entrar</h1>
+      <p id="authSubtitle">Acesso à Central VitalVeg.</p>
+      <div class="auth-field"><label for="authPin">PIN</label><input id="authPin" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="••••" /></div>
+      <div id="authConfirmWrap" class="auth-field"><label for="authConfirmPin">Confirmar PIN</label><input id="authConfirmPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" /></div>
+      <div id="authError" class="auth-error"></div>
+      <button id="authSubmit" class="auth-primary" type="button">Entrar</button>
+      <button id="authReset" class="auth-secondary" type="button">Esqueci o PIN / repor neste dispositivo</button>
+      <p class="auth-note">Nesta fase de teste, o PIN protege o acesso neste dispositivo. Antes de ligarmos emails reais, o login será validado no servidor — não vamos deixar dados reais protegidos apenas pelo navegador.</p>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
