@@ -1,1 +1,1 @@
-Deploy Central VitalVeg V8.3 production — 2026-09-09 — inteligência temporal e histórico correto
+Deploy Central VitalVeg V8.4 production — 2026-09-09 — sessão única, email persistente e sync em segundo plano
