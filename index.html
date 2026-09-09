@@ -27,7 +27,7 @@
 
       <nav class="nav" aria-label="Navegação principal">
         <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span>Início</span></button>
-        <button class="nav-item" data-view="conversations"><span class="nav-icon">◌</span><span>Conversas</span><span class="pill" id="navReviewCount">3</span></button>
+        <button class="nav-item" data-view="conversations"><span class="nav-icon">◌</span><span>Conversas</span><span class="pill" id="navReviewCount">0</span></button>
         <button class="nav-item" data-view="orders"><span class="nav-icon">▣</span><span>Encomendas</span></button>
         <button class="nav-item" data-view="customers"><span class="nav-icon">◎</span><span>Clientes</span></button>
         <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span>Definições</span></button>
@@ -35,7 +35,7 @@
 
       <div class="side-status">
         <span class="status-dot"></span>
-        <div><strong>Modo de preparação</strong><small>Email ainda não ligado</small></div>
+        <div><strong>Email desligado</strong><small>À espera da ligação real</small></div>
       </div>
     </aside>
 
@@ -68,10 +68,10 @@
         </div>
 
         <div class="metric-grid">
-          <article class="metric-card metric-green"><div class="metric-icon">▣</div><div><span>Encomendas hoje</span><strong id="metricOrders">7</strong><small>5 já confirmadas</small></div></article>
-          <article class="metric-card metric-amber"><div class="metric-icon">!</div><div><span>A rever</span><strong id="metricReview">3</strong><small>Precisam de decisão humana</small></div></article>
-          <article class="metric-card metric-blue"><div class="metric-icon">✓</div><div><span>Resolvidas automaticamente</span><strong>18</strong><small>Sem intervenção manual</small></div></article>
-          <article class="metric-card metric-violet"><div class="metric-icon">◌</div><div><span>Conversas em curso</span><strong>5</strong><small>Email · WhatsApp futuro</small></div></article>
+          <article class="metric-card metric-green"><div class="metric-icon">▣</div><div><span>Encomendas hoje</span><strong id="metricOrders">0</strong><small>A aguardar ligação ao email</small></div></article>
+          <article class="metric-card metric-amber"><div class="metric-icon">!</div><div><span>A rever</span><strong id="metricReview">0</strong><small>A aguardar ligação ao email</small></div></article>
+          <article class="metric-card metric-blue"><div class="metric-icon">✓</div><div><span>Tratadas hoje</span><strong>0</strong><small>A aguardar ligação ao email</small></div></article>
+          <article class="metric-card metric-violet"><div class="metric-icon">◌</div><div><span>Conversas carregadas</span><strong>0</strong><small>A aguardar ligação ao email</small></div></article>
         </div>
 
         <div class="dashboard-grid">
@@ -161,7 +161,7 @@
       <div id="authError" class="auth-error"></div>
       <button id="authSubmit" class="auth-primary" type="button">Entrar</button>
       <button id="authReset" class="auth-secondary" type="button">Esqueci o PIN / repor neste dispositivo</button>
-      <p class="auth-note">Nesta fase de teste, o PIN protege o acesso neste dispositivo. Antes de ligarmos emails reais, o login será validado no servidor — não vamos deixar dados reais protegidos apenas pelo navegador.</p>
+      <p class="auth-note">O PIN bloqueia o ecrã apenas neste dispositivo. Os emails só são carregados depois de introduzires a palavra-passe da caixa em cada sessão; essa palavra-passe não fica guardada.</p>
     </div>
   </div>
 
