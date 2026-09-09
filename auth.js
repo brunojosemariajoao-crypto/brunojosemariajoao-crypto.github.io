@@ -1,6 +1,7 @@
 (() => {
   const PIN_KEY = 'vitalveg-local-pin-v1';
   const SESSION_KEY = 'vitalveg-session-v1';
+  const TRUSTED_KEY = 'vitalveg-trusted-device-v2';
   let deferredPrompt = null;
 
   const qs = (s, r=document) => r.querySelector(s);
@@ -22,8 +23,9 @@
     return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2,'0')).join('');
   }
 
-  function unlock(){
+  function unlock(remember=true){
     sessionStorage.setItem(SESSION_KEY,'1');
+    if(remember) localStorage.setItem(TRUSTED_KEY,'1');
     gate?.classList.remove('show');
     body.classList.remove('auth-pending');
   }
@@ -36,17 +38,16 @@
 
   function setMode(){
     const exists = !!localStorage.getItem(PIN_KEY);
+    confirmWrap.hidden = true;
     if(exists){
       title.textContent = 'Entrar na Central VitalVeg';
-      subtitle.textContent = 'Introduz o PIN deste dispositivo.';
-      confirmWrap.hidden = true;
-      submit.textContent = 'Entrar';
+      subtitle.textContent = 'Introduz o PIN uma vez para autorizar este dispositivo.';
+      submit.textContent = 'Entrar e memorizar este dispositivo';
       reset.hidden = false;
     }else{
       title.textContent = 'Criar acesso';
-      subtitle.textContent = 'Cria um PIN de 4 dígitos para proteger esta versão no teu telemóvel.';
-      confirmWrap.hidden = false;
-      submit.textContent = 'Criar acesso e entrar';
+      subtitle.textContent = 'Escolhe um PIN de 4 dígitos. Só será pedido novamente se repuseres os dados deste dispositivo.';
+      submit.textContent = 'Criar acesso';
       reset.hidden = true;
     }
   }
@@ -61,13 +62,8 @@
 
     const stored = localStorage.getItem(PIN_KEY);
     if(!stored){
-      const confirmation = (confirmPin.value || '').trim();
-      if(value !== confirmation){
-        error.textContent = 'Os dois PIN não coincidem.';
-        return;
-      }
       localStorage.setItem(PIN_KEY, await hashPin(value));
-      unlock();
+      unlock(true);
       return;
     }
 
@@ -77,20 +73,19 @@
       pin.select();
       return;
     }
-    unlock();
+    unlock(true);
   }
 
   submit?.addEventListener('click', handleSubmit);
-  [pin, confirmPin].forEach(el => el?.addEventListener('keydown', e => {
-    if(e.key === 'Enter') handleSubmit();
-  }));
+  pin?.addEventListener('keydown', e => { if(e.key === 'Enter') handleSubmit(); });
 
   reset?.addEventListener('click', () => {
-    if(confirm('Repor o acesso local deste dispositivo? Isto não apaga encomendas; apenas remove o PIN de teste.')){
+    if(confirm('Repor o acesso local deste dispositivo? Isto não apaga encomendas; remove apenas o PIN e a autorização local.')){
       localStorage.removeItem(PIN_KEY);
+      localStorage.removeItem(TRUSTED_KEY);
       sessionStorage.removeItem(SESSION_KEY);
       pin.value = '';
-      confirmPin.value = '';
+      if(confirmPin) confirmPin.value = '';
       setMode();
     }
   });
@@ -159,34 +154,37 @@
   }
 
   function loadOpsLayer(){
-    addCss('v8-ops.css?v=8.3','data-v8-ops-css');
-    const loadOps=()=>loadScript('v8-ops.js?v=8.3','data-v8-ops-js');
-    const loadIntelligence=()=>loadScript('v8-order-intelligence.js?v=8.3','data-v8-order-intelligence-js',loadOps);
+    addCss('v8-ops.css?v=8.4','data-v8-ops-css');
+    const loadSession=()=>loadScript('v8-session.js?v=8.4','data-v8-session-js');
+    const loadOps=()=>loadScript('v8-ops.js?v=8.4','data-v8-ops-js',loadSession);
+    const loadIntelligence=()=>loadScript('v8-order-intelligence.js?v=8.4','data-v8-order-intelligence-js',loadOps);
     const existing=document.querySelector('script[data-v8-delivery-js]');
     if(existing){ loadIntelligence(); return; }
-    loadScript('v8-delivery-fix.js?v=8.3','data-v8-delivery-js',loadIntelligence);
+    loadScript('v8-delivery-fix.js?v=8.4','data-v8-delivery-js',loadIntelligence);
   }
 
   function loadHotfix(){
-    addCss('v8-hotfix.css?v=8.3','data-v8-hotfix-css');
+    addCss('v8-hotfix.css?v=8.4','data-v8-hotfix-css');
     const existing=document.querySelector('script[data-v8-hotfix-js]');
     if(existing){ loadOpsLayer(); return; }
-    loadScript('v8-hotfix.js?v=8.3','data-v8-hotfix-js',loadOpsLayer);
+    loadScript('v8-hotfix.js?v=8.4','data-v8-hotfix-js',loadOpsLayer);
   }
 
   function loadV8Layer(){
-    addCss('v8.css?v=8.3','data-v8-css');
+    addCss('v8.css?v=8.4','data-v8-css');
     const existing=document.querySelector('script[data-v8-js]');
     if(existing){
       if(window.VITALVEG_VERSION) loadHotfix();
       else existing.addEventListener('load', loadHotfix, {once:true});
       return;
     }
-    loadScript('v8.js?v=8.3','data-v8-js',loadHotfix);
+    loadScript('v8.js?v=8.4','data-v8-js',loadHotfix);
   }
 
   window.addEventListener('load', loadV8Layer, { once:true });
 
   setMode();
-  if(sessionStorage.getItem(SESSION_KEY) === '1') unlock(); else showGate();
+  if(localStorage.getItem(PIN_KEY) && localStorage.getItem(TRUSTED_KEY)==='1') unlock(false);
+  else if(sessionStorage.getItem(SESSION_KEY) === '1') unlock(false);
+  else showGate();
 })();
