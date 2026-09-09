@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 
 const SMTP_HOST = "smtp.securemail.pro";
 const SMTP_PORT = 465;
+const ALLOWED_ACCOUNT = "geral@vitalveg.pt";
 
 export default async (req: Request, context: Context) => {
   if (req.method !== "POST") {
@@ -16,7 +17,7 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: "Pedido inválido" }, { status: 400 });
   }
 
-  const user = String(body?.email || "").trim();
+  const user = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "");
   const to = String(body?.to || "").trim();
   const subject = String(body?.subject || "").trim();
@@ -26,6 +27,9 @@ export default async (req: Request, context: Context) => {
 
   if (!user || !password || !to || !subject || !text) {
     return Response.json({ error: "Faltam dados obrigatórios" }, { status: 400 });
+  }
+  if (user !== ALLOWED_ACCOUNT) {
+    return Response.json({ error: "Esta central está limitada ao email VitalVeg configurado." }, { status: 403 });
   }
 
   const transporter = nodemailer.createTransport({
