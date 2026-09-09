@@ -27,6 +27,16 @@ export type QueueItem={
   updatedAt:string;
 };
 
+export type WorkerThreadState={
+  threadKey:string;
+  latestInboundId:string;
+  latestInboundDate:string;
+  lastFingerprint:string|null;
+  lastResult:"processed"|"error";
+  lastError:string|null;
+  updatedAt:string;
+};
+
 export async function getJson<T=any>(key:string):Promise<T|null>{
   return await store().get(key,{type:"json"}) as T|null;
 }
@@ -60,6 +70,15 @@ export async function getThreadOrderId(threadKey:string){
 }
 export async function saveThreadOrderId(threadKey:string,orderId:string){
   await setJson(`threads/${threadId(threadKey)}.json`,{threadKey,orderId,updatedAt:new Date().toISOString()});
+}
+
+export async function getWorkerThreadState(threadKey:string){
+  return getJson<WorkerThreadState>(`worker/${threadId(threadKey)}.json`);
+}
+export async function saveWorkerThreadState(threadKey:string,value:Omit<WorkerThreadState,"threadKey"|"updatedAt">){
+  const state:WorkerThreadState={threadKey,...value,updatedAt:new Date().toISOString()};
+  await setJson(`worker/${threadId(threadKey)}.json`,state);
+  return state;
 }
 
 export async function upsertQueueItem(input:Omit<QueueItem,"id"|"status"|"createdAt"|"updatedAt"> & {id?:string}){
