@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
 import { consolidateOrder, resolveDeliveryDate, type AiAnalysis, type OrderEvent, type OrderRecord } from "./order-engine.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
+import { executeManagedSend } from "./managed-send-core.mts";
 import {
   appendActivity, findOpenOrderForCustomer, getAnalysis, getAutonomyPolicy,
   getOrder, getProcessedResult, getThreadOrderId, saveAnalysis, saveOrder,
@@ -70,7 +71,10 @@ export async function processConversation(input:ProcessConversationInput){
   const policy=await getAutonomyPolicy();
   const autonomy=decideAutonomy(analysis,order,policy);
   let queueItem:any=null;
-  if(autonomy.mode==="review"||autonomy.mode==="await_approval"){
+  let autoSend:any=null;
+  let autoSendError:string|null=null;
+
+  if(["review","await_approval","auto_execute"].includes(autonomy.mode)){
     const to=analysis.customerEmail||cleanAddress(String(latest?.from||""))||null;
     const references=[...(Array.isArray(latest?.references)?latest.references:[]),latest?.messageId].filter(Boolean).map(String);
     queueItem=await upsertQueueItem({
@@ -91,6 +95,32 @@ export async function processConversation(input:ProcessConversationInput){
     });
   }
 
+  if(autonomy.mode==="auto_execute" && queueItem?.suggestedReply){
+    try{
+      autoSend=await executeManagedSend(queueItem.id,queueItem.suggestedReply,"autonomy");
+      if(autoSend?.order)order=autoSend.order;
+    }catch(error:any){
+      autoSendError=String(error?.message||"Falha no envio autónomo");
+      queueItem=await upsertQueueItem({
+        id:queueItem.id,
+        threadKey:queueItem.threadKey,
+        orderId:queueItem.orderId,
+        kind:"review",
+        title:queueItem.title,
+        summary:queueItem.summary,
+        reasons:[...new Set([...(queueItem.reasons||[]),`Falha na execução autónoma: ${autoSendError}`])],
+        suggestedReply:queueItem.suggestedReply,
+        analysisFingerprint:queueItem.analysisFingerprint,
+        to:queueItem.to,
+        subject:queueItem.subject,
+        inReplyTo:queueItem.inReplyTo,
+        references:queueItem.references||[],
+        sourceMessageId:queueItem.sourceMessageId
+      });
+      await appendActivity("autonomy_failed",{threadKey,queueItemId:queueItem.id,error:autoSendError});
+    }
+  }
+
   const deliveryPreview=analysis.orderAction==="create"?resolveDeliveryDate(receivedAt,analysis.deliveryDateExplicit):null;
   const result={
     ok:true,
@@ -98,6 +128,8 @@ export async function processConversation(input:ProcessConversationInput){
     order,
     autonomy,
     queueItem,
+    autoSend,
+    autoSendError,
     deliveryPreview,
     fingerprint,
     model:aiResult.model||null,
@@ -113,7 +145,8 @@ export async function processConversation(input:ProcessConversationInput){
     orderId:order?.id||null,
     orderNumber:order?.number||null,
     autonomyMode:autonomy.mode,
-    queueItemId:queueItem?.id||null
+    queueItemId:queueItem?.id||null,
+    autoSent:!!autoSend
   });
   await saveProcessedResult(fingerprint,{result});
   return result;
