@@ -9,8 +9,7 @@ self.addEventListener('push',event=>{
     body:data.body||'O funcionário digital precisa da tua atenção.',
     tag:data.tag||'vitalveg',
     renotify:true,
-    data:{url:data.url||'/v9/'},
-    badge:'/v9/notification-badge.png'
+    data:{url:data.url||'/v9/'}
   };
   event.waitUntil(self.registration.showNotification(title,options));
 });
