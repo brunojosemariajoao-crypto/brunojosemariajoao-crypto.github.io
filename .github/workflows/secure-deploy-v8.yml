@@ -33,6 +33,8 @@ jobs:
           node --check v8-order-intelligence.js
           node --check v8-ops.js
           node --check v8-session.js
+          node --check v8-generic-order-lines.js
+          node --check v8-auth-once.js
 
       - name: Prepare clean deploy directory
         run: |
@@ -40,7 +42,7 @@ jobs:
           DEST=/tmp/vitalveg-v8-deploy
           rm -rf "$DEST"
           mkdir -p "$DEST/netlify/functions"
-          cp index.html styles.css auth.css auth.js app.js v8.css v8.js v8-hotfix.css v8-hotfix.js v8-delivery-fix.js v8-order-intelligence.js v8-ops.css v8-ops.js v8-session.js manifest.json icon.svg sw.js netlify.toml package.json package-lock.json "$DEST/"
+          cp index.html styles.css auth.css auth.js app.js v8.css v8.js v8-hotfix.css v8-hotfix.js v8-delivery-fix.js v8-order-intelligence.js v8-ops.css v8-ops.js v8-session.js v8-generic-order-lines.js v8-auth-once.js manifest.json icon.svg sw.js netlify.toml package.json package-lock.json "$DEST/"
           cp netlify/functions/*.mts "$DEST/netlify/functions/"
           cd "$DEST"
           npm install --package-lock-only --ignore-scripts
