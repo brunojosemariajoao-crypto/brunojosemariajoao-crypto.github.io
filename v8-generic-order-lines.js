@@ -1,4 +1,4 @@
-/* Central VitalVeg V8.5 — qualquer linha quantidade + unidade + artigo entra na encomenda */
+/* Central VitalVeg V8.5 — qualquer artigo pedido entra no resumo da encomenda */
 (() => {
   const ORDER_UNIT_RE = /\b(\d+(?:[.,]\d+)?)\s*(?:x\s*)?(cx|cxs|caixa|caixas|kg|kgs|quilo|quilos|covete|covetes|un|unid|unidade|unidades|molho|molhos|tabuleiro|tabuleiros|saco|sacos)\b/i;
 
@@ -6,21 +6,31 @@
     return String(line).replace(/^[-•*\s]+/,'').replace(/\s+/g,' ').trim();
   }
 
+  function normalKey(text=''){
+    return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
   function parseOrderLine(line=''){
     const raw=cleanLine(line);
-    const m=raw.match(ORDER_UNIT_RE);
-    if(!m) return null;
-    const after=raw.slice((m.index||0)+m[0].length).replace(/^\s*[-:–—]?\s*/,'').trim();
-    if(!after || after.length<2) return null;
-    const low=after.toLowerCase();
-    if(/^(dia|dias|hora|horas|minuto|minutos|vez|vezes)\b/.test(low)) return null;
-    return {
-      raw,
-      qty:Number(m[1].replace(',','.')),
-      unit:m[2],
-      description:after,
-      key:after.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
-    };
+    if(!raw || raw.length<3) return null;
+
+    const withUnit=raw.match(ORDER_UNIT_RE);
+    if(withUnit){
+      const after=raw.slice((withUnit.index||0)+withUnit[0].length).replace(/^\s*[-:–—]?\s*/,'').trim();
+      if(!after || after.length<2) return null;
+      const low=after.toLowerCase();
+      if(/^(dia|dias|hora|horas|minuto|minutos|vez|vezes)\b/.test(low)) return null;
+      return {raw,qty:Number(withUnit[1].replace(',','.')),unit:withUnit[2],description:after,key:normalKey(after),matched:withUnit[0]};
+    }
+
+    // Também aceita pedidos como "4 alfaces" ou "2 agriões" mesmo sem unidade explícita.
+    const simple=raw.match(/^(?:mais\s+|acrescentar\s+|adicionar\s+)?(\d+(?:[.,]\d+)?)\s+([\p{L}][\p{L}\d ./%ºª_-]{1,})$/iu);
+    if(!simple) return null;
+    const description=simple[2].trim();
+    const low=description.toLowerCase();
+    if(/^(dia|dias|hora|horas|minuto|minutos|vez|vezes|euros?|€)\b/.test(low)) return null;
+    if(/^\d{1,2}[\/-]\d{1,2}/.test(description)) return null;
+    return {raw,qty:Number(simple[1].replace(',','.')),unit:'un',description,key:normalKey(description),matched:simple[0]};
   }
 
   function orderLinesFromMessage(m){
@@ -30,46 +40,40 @@
 
   function genericFinalOrderSummary(thread){
     if(!thread?.messages?.length) return '';
-    const incoming=thread.messages
-      .filter(m=>m.direction==='in')
-      .sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const incoming=thread.messages.filter(m=>m.direction==='in').sort((a,b)=>new Date(a.date)-new Date(b.date));
     const relevant=incoming.filter(m=>['ENCOMENDA','ALTERAÇÃO À ENCOMENDA'].includes(m.type) || orderLinesFromMessage(m).length);
     if(!relevant.length) return '';
 
     const current=new Map();
     let started=false;
-    const unresolved=[];
 
     for(const m of relevant){
-      const lines=orderLinesFromMessage(m);
-      if(!lines.length) continue;
+      const parsed=orderLinesFromMessage(m);
+      if(!parsed.length) continue;
       const low=((m.current||m.text||'')+' '+(m.subject||'')).toLowerCase();
       const alteration = m.type==='ALTERAÇÃO À ENCOMENDA' || (/^re:/i.test(m.subject||'') && /\b(mais|acrescent|adicion|retir|alter|afinal|em vez|apenas|s[oó])\b/i.test(low));
 
       if(!alteration){
-        if(lines.length>=2 || !started) current.clear();
-        for(const item of lines) current.set(item.key,item);
+        if(parsed.length>=2 || !started) current.clear();
+        parsed.forEach(item=>current.set(item.key,item));
         started=true;
         continue;
       }
 
-      for(const item of lines){
+      for(const item of parsed){
         const lineLow=item.raw.toLowerCase();
         const old=current.get(item.key);
         if(/\b(retirar|retira|anular|anula|cancelar|cancela|sem)\b/.test(lineLow) && item.qty===0){
           current.delete(item.key);
-        }else if(/\bmais\b|acrescent|adicion/.test(lineLow) && old){
-          const sameUnit=String(old.unit).toLowerCase()===String(item.unit).toLowerCase();
-          if(sameUnit){
-            const replacement=item.raw.replace(ORDER_UNIT_RE,`${String(old.qty+item.qty).replace('.',',')} ${old.unit}`);
-            current.set(item.key,{...item,qty:old.qty+item.qty,unit:old.unit,raw:replacement});
-          }else current.set(item.key,item);
+        }else if(/\bmais\b|acrescent|adicion/.test(lineLow) && old && String(old.unit).toLowerCase()===String(item.unit).toLowerCase()){
+          const newQty=old.qty+item.qty;
+          const replacement=old.raw.replace(/^\s*\d+(?:[.,]\d+)?/,String(newQty).replace('.',','));
+          current.set(item.key,{...old,qty:newQty,raw:replacement});
         }else current.set(item.key,item);
       }
     }
 
-    const rows=[...current.values()].map(x=>x.raw);
-    return rows.join(' · ')+(unresolved.length?` · A rever: ${unresolved.join(' · ')}`:'');
+    return [...current.values()].map(x=>x.raw).join(' · ');
   }
 
   function install(){
@@ -82,8 +86,8 @@
       const base=baseClassify(m);
       if(m?.direction!=='in') return base;
       if(['DOCUMENTO / FATURA','PUBLICIDADE / MARKETING','AUTOMÁTICO / SISTEMA','PROBLEMA / RECLAMAÇÃO'].includes(base)) return base;
-      const lines=orderLinesFromMessage(m);
-      if(!lines.length) return base;
+      const parsed=orderLinesFromMessage(m);
+      if(!parsed.length) return base;
       const text=((m.current||m.text||'')+' '+(m.subject||'')).toLowerCase();
       if(/^re:/i.test(m.subject||'') && /\b(mais|acrescent|adicion|retir|alter|afinal|em vez|apenas|s[oó])\b/i.test(text)) return 'ALTERAÇÃO À ENCOMENDA';
       return 'ENCOMENDA';
@@ -107,11 +111,10 @@
       const summary=document.querySelector('#conversationDetail .ai-summary ul');
       if(!summary) return;
       let row=[...summary.querySelectorAll('li')].find(li=>/^Pedido (atual|final):/i.test(li.textContent||''));
-      if(!row){ row=document.createElement('li'); summary.insertBefore(row,summary.children[1]||null); }
+      if(!row){row=document.createElement('li');summary.insertBefore(row,summary.children[1]||null);}
       row.textContent=`Pedido final: ${generic}`;
     };
 
-    // Reclassifica imediatamente o que já estava carregado antes desta camada.
     if(Array.isArray(state.messages)&&state.messages.length){
       state.threads=buildThreads(state.messages);
       try{renderAllReal();}catch{}
