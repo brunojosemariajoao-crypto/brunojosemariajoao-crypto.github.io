@@ -1,5 +1,5 @@
 const CACHE='vitalveg-pwa-v8-5';
-const ASSETS=['/','/index.html','/styles.css','/auth.css','/auth.js','/app.js','/v8.css','/v8.js','/v8-hotfix.css','/v8-hotfix.js','/v8-delivery-fix.js','/v8-order-intelligence.js','/v8-ops.css','/v8-ops.js','/v8-session.js','/v8-generic-order-lines.js','/v8-auth-once.js','/manifest.json','/icon.svg'];
+const ASSETS=['/','/index.html','/styles.css','/auth.css','/auth.js','/app.js','/v8.css','/v8.js','/v8-hotfix.css','/v8-hotfix.js','/v8-delivery-fix.js','/v8-order-intelligence.js','/v8-ops.css','/v8-ops.js','/v8-session.js','/v8-generic-order-lines.js','/v8-print-fix.js','/manifest.json','/icon.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
