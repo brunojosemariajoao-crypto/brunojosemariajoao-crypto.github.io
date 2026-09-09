@@ -1,0 +1,11 @@
+{
+  "name": "vitalveg-central",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/functions": "latest",
+    "imapflow": "latest",
+    "mailparser": "latest",
+    "nodemailer": "latest"
+  }
+}
