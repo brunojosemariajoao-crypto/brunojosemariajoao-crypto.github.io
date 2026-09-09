@@ -37,6 +37,10 @@ export async function saveAnalysis(fingerprint:string,value:any){
   await setJson(`analysis/${fingerprint}.json`,{...value,savedAt:new Date().toISOString()});
 }
 export async function getAnalysis(fingerprint:string){return getJson(`analysis/${fingerprint}.json`);}
+export async function saveProcessedResult(fingerprint:string,value:any){
+  await setJson(`processed/${fingerprint}.json`,{...value,processedAt:new Date().toISOString()});
+}
+export async function getProcessedResult(fingerprint:string){return getJson(`processed/${fingerprint}.json`);}
 
 export async function saveOrder(order:OrderRecord){await setJson(`orders/${order.id}.json`,order);}
 export async function getOrder(id:string){return getJson<OrderRecord>(`orders/${id}.json`);}
