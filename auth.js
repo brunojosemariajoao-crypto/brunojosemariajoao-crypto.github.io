@@ -130,21 +130,39 @@
     }
   });
 
+  function addCss(href, marker){
+    if(document.querySelector(`link[${marker}]`)) return;
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href=href;
+    link.setAttribute(marker,'1');
+    document.head.appendChild(link);
+  }
+
+  function loadHotfix(){
+    addCss('v8-hotfix.css?v=8.1','data-v8-hotfix-css');
+    if(document.querySelector('script[data-v8-hotfix-js]')) return;
+    const hot=document.createElement('script');
+    hot.src='v8-hotfix.js?v=8.1';
+    hot.async=false;
+    hot.dataset.v8HotfixJs='1';
+    document.body.appendChild(hot);
+  }
+
   function loadV8Layer(){
-    if(!document.querySelector('link[data-v8-css]')){
-      const link=document.createElement('link');
-      link.rel='stylesheet';
-      link.href='v8.css?v=8';
-      link.dataset.v8Css='1';
-      document.head.appendChild(link);
+    addCss('v8.css?v=8.1','data-v8-css');
+    const existing=document.querySelector('script[data-v8-js]');
+    if(existing){
+      if(window.VITALVEG_VERSION) loadHotfix();
+      else existing.addEventListener('load', loadHotfix, {once:true});
+      return;
     }
-    if(!document.querySelector('script[data-v8-js]')){
-      const script=document.createElement('script');
-      script.src='v8.js?v=8';
-      script.async=false;
-      script.dataset.v8Js='1';
-      document.body.appendChild(script);
-    }
+    const script=document.createElement('script');
+    script.src='v8.js?v=8.1';
+    script.async=false;
+    script.dataset.v8Js='1';
+    script.addEventListener('load', loadHotfix, {once:true});
+    document.body.appendChild(script);
   }
 
   window.addEventListener('load', loadV8Layer, { once:true });
