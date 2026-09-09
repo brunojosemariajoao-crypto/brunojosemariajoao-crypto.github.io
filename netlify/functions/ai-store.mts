@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import type { OrderRecord } from "./order-engine.mts";
 import { DEFAULT_AUTONOMY_POLICY, type AutonomyPolicy } from "./autonomy-core.mts";
 
 const STORE_NAME="vitalveg-v9";
 function store(){return getStore(STORE_NAME,{consistency:"strong"});}
+function threadId(threadKey:string){return createHash("sha256").update(threadKey).digest("hex").slice(0,24);}
 
 export type QueueItem={
   id:string;
@@ -16,6 +17,11 @@ export type QueueItem={
   reasons:string[];
   suggestedReply:string|null;
   analysisFingerprint:string;
+  to:string|null;
+  subject:string|null;
+  inReplyTo:string|null;
+  references:string[];
+  sourceMessageId:string|null;
   status:"open"|"approved"|"rejected"|"resolved";
   createdAt:string;
   updatedAt:string;
@@ -45,6 +51,12 @@ export async function findOpenOrderForCustomer(email:string|null){
   const orders=await listOrders();
   return orders.find(o=>String(o.customerEmail||"").toLowerCase()===e && !["cancelled","historical"].includes(o.status))||null;
 }
+export async function getThreadOrderId(threadKey:string){
+  const link:any=await getJson(`threads/${threadId(threadKey)}.json`); return link?.orderId||null;
+}
+export async function saveThreadOrderId(threadKey:string,orderId:string){
+  await setJson(`threads/${threadId(threadKey)}.json`,{threadKey,orderId,updatedAt:new Date().toISOString()});
+}
 
 export async function upsertQueueItem(input:Omit<QueueItem,"id"|"status"|"createdAt"|"updatedAt"> & {id?:string}){
   const now=new Date().toISOString();
@@ -53,6 +65,11 @@ export async function upsertQueueItem(input:Omit<QueueItem,"id"|"status"|"create
   const item:QueueItem={...input,id,status:existing?.status||"open",createdAt:existing?.createdAt||now,updatedAt:now};
   await setJson(`queue/${id}.json`,item);
   return item;
+}
+export async function getQueueItem(id:string){return getJson<QueueItem>(`queue/${id}.json`);}
+export async function setQueueStatus(id:string,status:QueueItem["status"]){
+  const item=await getQueueItem(id); if(!item)return null;
+  const next={...item,status,updatedAt:new Date().toISOString()}; await setJson(`queue/${id}.json`,next); return next;
 }
 export async function listQueue(status="open",limit=200){
   const result:any=await store().list({prefix:"queue/"});
