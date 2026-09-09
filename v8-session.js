@@ -1,4 +1,4 @@
-/* Central VitalVeg V8.5 — sessão persistente do email, parser genérico, impressão e estado de envio */
+/* Central VitalVeg V8.8 — sessão persistente do email, parser genérico, impressão e estado de envio */
 (() => {
   const ACCOUNT='geral@vitalveg.pt';
   let installed=false;
@@ -27,8 +27,8 @@
     if(typeof state==='undefined'||typeof fetchRealMail!=='function'||typeof openConnectGate!=='function'||typeof sendReply!=='function'){setTimeout(install,80);return;}
     installed=true;
 
-    await loadOnce('v8-generic-order-lines.js?v=8.5','data-v8-generic-order-lines-js');
-    await loadOnce('v8-print-fix.js?v=8.5','data-v8-print-fix-js');
+    await loadOnce('v8-generic-order-lines.js?v=8.8','data-v8-generic-order-lines-js');
+    await loadOnce('v8-print-fix.js?v=8.8','data-v8-print-fix-js');
 
     const baseOpenConnectGate=openConnectGate;
     openConnectGate=function(message=''){
