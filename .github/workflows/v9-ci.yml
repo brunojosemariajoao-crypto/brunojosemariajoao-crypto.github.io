@@ -1,0 +1,28 @@
+name: Central VitalVeg V9 CI
+
+on:
+  push:
+    branches: ["ai-employee-v9"]
+  pull_request:
+    branches: ["v8-production"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate JavaScript and TypeScript syntax
+        run: |
+          node --check app.js
+          node --check auth.js
+          for f in netlify/functions/*.mts; do
+            node --experimental-strip-types --check "$f"
+          done
+      - name: Test deterministic order rules
+        run: node --experimental-strip-types --test tests/order-engine.test.mts
