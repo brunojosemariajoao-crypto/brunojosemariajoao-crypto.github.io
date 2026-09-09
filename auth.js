@@ -130,6 +130,25 @@
     }
   });
 
+  function loadV8Layer(){
+    if(!document.querySelector('link[data-v8-css]')){
+      const link=document.createElement('link');
+      link.rel='stylesheet';
+      link.href='v8.css?v=8';
+      link.dataset.v8Css='1';
+      document.head.appendChild(link);
+    }
+    if(!document.querySelector('script[data-v8-js]')){
+      const script=document.createElement('script');
+      script.src='v8.js?v=8';
+      script.async=false;
+      script.dataset.v8Js='1';
+      document.body.appendChild(script);
+    }
+  }
+
+  window.addEventListener('load', loadV8Layer, { once:true });
+
   setMode();
   if(sessionStorage.getItem(SESSION_KEY) === '1') unlock(); else showGate();
 })();
