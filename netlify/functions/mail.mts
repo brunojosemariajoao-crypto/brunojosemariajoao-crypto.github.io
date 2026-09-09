@@ -4,6 +4,7 @@ import { simpleParser } from "mailparser";
 
 const IMAP_HOST = "mail.securemail.pro";
 const IMAP_PORT = 993;
+const ALLOWED_ACCOUNT = "geral@vitalveg.pt";
 
 function cleanAddress(value: any): string {
   if (!value) return "";
@@ -74,12 +75,15 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: "Pedido inválido" }, { status: 400 });
   }
 
-  const user = String(body?.email || "").trim();
+  const user = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "");
   const limit = Math.min(120, Math.max(20, Number(body?.limit || 60)));
 
   if (!user || !password) {
     return Response.json({ error: "Email e palavra-passe são obrigatórios" }, { status: 400 });
+  }
+  if (user !== ALLOWED_ACCOUNT) {
+    return Response.json({ error: "Esta central está limitada ao email VitalVeg configurado." }, { status: 403 });
   }
 
   const client = new ImapFlow({
