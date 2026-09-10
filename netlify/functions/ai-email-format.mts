@@ -2,6 +2,8 @@ export const AI_SIGNATURE_TITLE="VitalVeg · Central Inteligente de Comunicaçõ
 export const AI_SIGNATURE_HUMAN_COPY="Esta mensagem foi analisada e preparada pelo nosso sistema autónomo com recurso a Inteligência Artificial e validada antes do envio.";
 export const AI_SIGNATURE_AUTONOMOUS_COPY="Esta mensagem foi analisada, preparada e enviada automaticamente pelo nosso sistema autónomo com recurso a Inteligência Artificial, de acordo com as regras operacionais da VitalVeg.";
 export const AI_SIGNATURE_SYSTEM_COPY="Esta mensagem foi gerida pela Central Inteligente VitalVeg com recurso a Inteligência Artificial e enviada através do nosso sistema digital.";
+// Compatibilidade com testes e integrações V9 anteriores: o nome antigo representa o modo assistido/humano.
+export const AI_SIGNATURE_COPY=AI_SIGNATURE_HUMAN_COPY;
 
 export type ManagedMailActor="human"|"autonomy"|"system";
 
