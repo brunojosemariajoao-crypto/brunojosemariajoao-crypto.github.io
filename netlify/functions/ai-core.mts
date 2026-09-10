@@ -107,15 +107,7 @@ export function requestFingerprint(input:AnalysisRequest){
     .digest("hex");
 }
 
-export async function analyzeConversation(input:AnalysisRequest){
-  const apiKey=Netlify.env.get("OPENAI_API_KEY");
-  const model=Netlify.env.get("OPENAI_MODEL")||"gpt-5.6-luna";
-  if(!apiKey)throw new Error("OPENAI_API_KEY não configurada");
-
-  const messages=compactMessages(input.messages||[]);
-  if(!messages.length)throw new Error("Sem mensagens para analisar");
-
-  const instructions=`És o funcionário digital da VitalVeg. Analisa a conversa comercial completa em português de Portugal e devolve apenas dados estruturados.
+const BASE_INSTRUCTIONS=`És o funcionário digital da VitalVeg. Analisa a conversa comercial completa em português de Portugal e devolve apenas dados estruturados.
 
 OBJETIVO
 Transformar mensagens em ações operacionais sem perder informação. O email é a fonte; a encomenda consolidada é o resultado.
@@ -139,31 +131,19 @@ REGRAS CRÍTICAS
 - sourceMessageIds deve referenciar apenas mensagens que suportam a decisão atual.
 - threadSummary deve explicar em 1-3 frases o estado atual da conversa para um operador humano.`;
 
-  const body:any={
-    model,
-    store:false,
-    instructions,
-    input:JSON.stringify({
-      knownCustomer:input.knownCustomer||null,
-      deliveryDays:input.deliveryDays||[2,4,6],
-      cutoff:input.cutoff||"14:00",
-      messages
-    }),
-    text:{format:{type:"json_schema",name:"vitalveg_mail_analysis_v2",strict:true,schema}}
-  };
+function outputText(data:any){
+  if(typeof data?.output_text==="string" && data.output_text.trim())return data.output_text.trim();
+  const parts:any[]=[];
+  for(const item of Array.isArray(data?.output)?data.output:[]){
+    if(item?.type!=="message")continue;
+    for(const part of Array.isArray(item?.content)?item.content:[]){
+      if(part?.type==="output_text" && typeof part?.text==="string")parts.push(part.text);
+    }
+  }
+  return parts.join("\n").trim();
+}
 
-  const res=await fetch("https://api.openai.com/v1/responses",{
-    method:"POST",
-    headers:{"Authorization":`Bearer ${apiKey}`,"Content-Type":"application/json"},
-    body:JSON.stringify(body)
-  });
-  const data:any=await res.json().catch(()=>({}));
-  if(!res.ok)throw new Error(data?.error?.message||`Falha IA (${res.status})`);
-
-  const text=String(data?.output_text||"").trim();
-  if(!text)throw new Error("A IA não devolveu análise estruturada");
-  const parsed=JSON.parse(text);
-
+function normalizeAnalysis(parsed:any){
   if(parsed.suggestedReply)parsed.suggestedReply=String(parsed.suggestedReply).trim();
   if(!Array.isArray(parsed.reviewReasons))parsed.reviewReasons=[];
   if(!Array.isArray(parsed.items))parsed.items=[];
@@ -173,12 +153,124 @@ REGRAS CRÍTICAS
       parsed.reviewReasons.push("Existe pelo menos uma linha de encomenda com interpretação incerta.");
     }
   }
+  return parsed;
+}
+
+async function runModel(apiKey:string,model:string,input:any,reviewOf:any=null){
+  const reviewer=reviewOf?`\n\nSEGUNDA LEITURA\nRecebeste também a análise preliminar de outro modelo. Revê-a contra as mensagens originais. Não a aceites por autoridade. Corrige apenas quando o texto do cliente sustentar a correção. Se continuar ambíguo, mantém a ambiguidade e exige revisão humana.`:"";
+  const body:any={
+    model,
+    store:false,
+    reasoning:{effort:reviewOf?"medium":"low"},
+    max_output_tokens:5000,
+    instructions:BASE_INSTRUCTIONS+reviewer,
+    input:JSON.stringify({...input,...(reviewOf?{preliminaryAnalysis:reviewOf}:{})}),
+    text:{verbosity:"low",format:{type:"json_schema",name:"vitalveg_mail_analysis_v3",strict:true,schema}}
+  };
+  const res=await fetch("https://api.openai.com/v1/responses",{
+    method:"POST",
+    headers:{"Authorization":`Bearer ${apiKey}`,"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  });
+  const data:any=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data?.error?.message||`Falha IA (${res.status})`);
+  const text=outputText(data);
+  if(!text)throw new Error("A IA não devolveu análise estruturada");
+  return {analysis:normalizeAnalysis(JSON.parse(text)),model:data.model||model,responseId:data.id||null,usage:data.usage||null};
+}
+
+function norm(value:any){return String(value??"").trim().toLowerCase().replace(/\s+/g," ");}
+function qty(value:any){return value===null||value===undefined?"":String(value).replace(",",".").trim();}
+function itemCritical(item:any){
+  return {
+    raw: norm(item?.rawLine),
+    product:norm(item?.normalizedProduct||item?.product),
+    unit:norm(item?.unit),
+    quantity:qty(item?.quantity),
+    operation:String(item?.operation||"")
+  };
+}
+export function criticalSignature(analysis:any){
+  return JSON.stringify({
+    messageType:analysis?.messageType||"",
+    orderAction:analysis?.orderAction||"",
+    changeMode:analysis?.changeMode||"",
+    deliveryDateExplicit:analysis?.deliveryDateExplicit||null,
+    items:(analysis?.items||[]).map(itemCritical).sort((a:any,b:any)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  });
+}
+
+export function shouldEscalateAnalysis(analysis:any){
+  if(!analysis)return true;
+  if(["PROBLEMA_RECLAMACAO"].includes(analysis.messageType))return false;
+  if(Number(analysis.confidence||0)<0.95)return true;
+  if(["CONVERSA_REVER","OUTRO_REVER"].includes(analysis.messageType))return true;
+  if(analysis.changeMode==="unknown")return true;
+  if((analysis.items||[]).some((x:any)=>Number(x?.confidence||0)<0.92 || x?.operation==="unknown"))return true;
+  if(analysis.orderAction!=="none" && Number(analysis.confidence||0)<0.97)return true;
+  return false;
+}
+
+function markModelDisagreement(primary:any,secondary:any){
+  if(criticalSignature(primary)===criticalSignature(secondary))return {analysis:secondary,disagreement:false};
+  const reason="Duas leituras de IA discordaram em dados operacionais da mensagem. Confirma a interpretação antes de executar.";
+  secondary.needsHumanReview=true;
+  secondary.reviewReasons=[...new Set([...(secondary.reviewReasons||[]),reason])];
+  secondary.confidence=Math.min(Number(secondary.confidence||0),0.79);
+
+  // Nenhuma linha identificada na primeira leitura pode desaparecer silenciosamente na segunda.
+  const secondaryKeys=new Set((secondary.items||[]).map((x:any)=>`${norm(x?.rawLine)}|${norm(x?.product)}|${norm(x?.unit)}`));
+  for(const item of primary.items||[]){
+    const key=`${norm(item?.rawLine)}|${norm(item?.product)}|${norm(item?.unit)}`;
+    if(!secondaryKeys.has(key)){
+      secondary.items.push({...item,confidence:Math.min(Number(item?.confidence||0),0.55),operation:"unknown",notes:[item?.notes,"Linha preservada devido a divergência entre modelos."].filter(Boolean).join(" · ")});
+    }
+  }
+  for(const item of secondary.items||[]){
+    item.confidence=Math.min(Number(item?.confidence||0),0.79);
+  }
+  return {analysis:secondary,disagreement:true};
+}
+
+export async function analyzeConversation(input:AnalysisRequest){
+  const apiKey=Netlify.env.get("OPENAI_API_KEY");
+  if(!apiKey)throw new Error("OPENAI_API_KEY não configurada");
+
+  const primaryModel=Netlify.env.get("OPENAI_PRIMARY_MODEL")||Netlify.env.get("OPENAI_MODEL")||"gpt-5.6-luna";
+  const escalationModel=Netlify.env.get("OPENAI_ESCALATION_MODEL")||"gpt-5.6-terra";
+  const messages=compactMessages(input.messages||[]);
+  if(!messages.length)throw new Error("Sem mensagens para analisar");
+
+  const modelInput={
+    knownCustomer:input.knownCustomer||null,
+    deliveryDays:input.deliveryDays||[2,4,6],
+    cutoff:input.cutoff||"14:00",
+    messages
+  };
+
+  const primary=await runModel(apiKey,primaryModel,modelInput);
+  const calls:any[]=[{model:primary.model,responseId:primary.responseId,usage:primary.usage,role:"primary"}];
+  let chosen=primary.analysis;
+  let escalated=false;
+  let disagreement=false;
+
+  if(escalationModel && escalationModel!==primaryModel && shouldEscalateAnalysis(primary.analysis)){
+    const secondary=await runModel(apiKey,escalationModel,modelInput,primary.analysis);
+    calls.push({model:secondary.model,responseId:secondary.responseId,usage:secondary.usage,role:"reviewer"});
+    const compared=markModelDisagreement(primary.analysis,secondary.analysis);
+    chosen=compared.analysis;
+    escalated=true;
+    disagreement=compared.disagreement;
+  }
 
   return {
-    analysis:parsed,
-    model:data.model||model,
-    responseId:data.id||null,
-    usage:data.usage||null,
+    analysis:chosen,
+    model:calls.at(-1)?.model||primaryModel,
+    responseId:calls.at(-1)?.responseId||null,
+    usage:calls.at(-1)?.usage||null,
+    calls,
+    escalated,
+    disagreement,
     fingerprint:requestFingerprint(input)
   };
 }
