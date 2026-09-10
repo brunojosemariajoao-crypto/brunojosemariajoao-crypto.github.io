@@ -19,6 +19,9 @@ export type ShadowEvaluation={
   evaluatedAt:string;
   sourceMessageId:string;
   sourceDate:string;
+  sourceFrom:string;
+  sourceTo:string;
+  sourceText:string;
   subject:string;
   customerEmail:string|null;
   analysis:any;
@@ -87,7 +90,8 @@ export async function evaluateShadowConversation(input:{threadKey:string;message
   const evaluation:ShadowEvaluation={
     id:`shadow_${fingerprint.slice(0,16)}`,
     fingerprint,threadKey,evaluatedAt:new Date().toISOString(),sourceMessageId,
-    sourceDate:receivedAt,subject:String(latest?.subject||"(sem assunto)"),
+    sourceDate:receivedAt,sourceFrom:String(latest?.from||""),sourceTo:String(latest?.to||""),
+    sourceText:String(latest?.text||"").slice(0,12000),subject:String(latest?.subject||"(sem assunto)"),
     customerEmail:analysis.customerEmail||null,analysis,orderPreview,autonomyPreview,
     wouldDo:wouldDoFor(autonomyPreview.mode),model:aiResult.model||null,
     escalated:!!aiResult.escalated,disagreement:!!aiResult.disagreement,
