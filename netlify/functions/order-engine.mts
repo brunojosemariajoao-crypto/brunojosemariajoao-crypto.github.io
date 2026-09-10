@@ -118,7 +118,12 @@ function todayLisbon(now=new Date()){
 export function resolveDeliveryDate(receivedAt:string, explicitDate:string|null, deliveryDays=[2,4,6], cutoff="14:00"){
   const explicit=parseDateKey(explicitDate);
   if(explicit){
-    return {date:dateKey(explicit.y,explicit.m,explicit.d),source:"explicit" as const,needsReview:false,reason:""};
+    const explicitKey=dateKey(explicit.y,explicit.m,explicit.d);
+    const regularDeliveryDay=deliveryDays.includes(weekdayForKey(explicitKey));
+    return {
+      date:explicitKey,source:"explicit" as const,needsReview:!regularDeliveryDay,
+      reason:regularDeliveryDay?"":`O cliente indicou explicitamente ${explicitKey}, uma data fora dos dias habituais de entrega. Confirmar entrega extraordinária antes de aceitar.`
+    };
   }
 
   const p=lisbonParts(receivedAt);
@@ -234,6 +239,7 @@ export function consolidateOrder(events:OrderEvent[], existing?:OrderRecord|null
       if(a.deliveryDateExplicit){
         const resolved=resolveDeliveryDate(event.receivedAt,a.deliveryDateExplicit);
         deliveryDate=resolved.date; deliverySource=resolved.source;
+        if(resolved.needsReview && resolved.reason)reasons.push(resolved.reason);
       }
       if(a.changeMode==="full_snapshot"){
         map.clear();
