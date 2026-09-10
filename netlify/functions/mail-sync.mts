@@ -11,6 +11,7 @@ const MAX_AI_THREADS_PER_RUN=8;
 const BOOTSTRAP_FRESH_WINDOW_MS=10*60*1000;
 const ERROR_RETRY_MS=15*60*1000;
 const WORKER_INDEX_KEY="worker/index-v3.json";
+const WORKER_HEALTH_KEY="worker/health-v1.json";
 
 type WorkerEntry={
   latestInboundId:string;
@@ -41,11 +42,20 @@ function pruneWorkerIndex(index:WorkerIndex,now=Date.now()){
   }
   return index;
 }
+function safeError(error:any){return String(error?.message||error||"Erro desconhecido").replace(/\s+/g," ").trim().slice(0,600);}
+function classifyHealthError(message:string){
+  if(/OPENAI_API_KEY|OPENAI_MODEL/i.test(message))return "ai_not_configured";
+  if(/AI_BUDGET_EXCEEDED|limite diário de IA/i.test(message))return "ai_budget_reached";
+  return "processing_error";
+}
 
 export default async () => {
   const runStarted=Date.now();
   try{
-    if(!(await mailboxConfigured()))return;
+    if(!(await mailboxConfigured())){
+      await setJson(WORKER_HEALTH_KEY,{status:"mailbox_unconfigured",code:"mailbox_unconfigured",lastRunAt:new Date().toISOString(),operationMode:null,processingErrors:0,deferredThreads:0,lastError:null});
+      return;
+    }
     const operationMode=await getAiOperationMode();
     const mailbox=await syncV9Mailbox();
     const threads=buildMailThreads(Array.isArray(mailbox?.messages)?mailbox.messages:[])
@@ -53,7 +63,8 @@ export default async () => {
       .sort((a,b)=>validDateMs(b.latestInbound?.date)-validDateMs(a.latestInbound?.date));
 
     const worker=pruneWorkerIndex((await getJson<WorkerIndex>(WORKER_INDEX_KEY))||{},runStarted);
-    let aiRuns=0,processed=0,shadowEvaluated=0,baseline=0,errors=0,skipped=0;
+    let aiRuns=0,processed=0,shadowEvaluated=0,baseline=0,errors=0,skipped=0,deferred=0;
+    let lastError:string|null=null;
 
     for(const thread of threads){
       const latest=thread.latestInbound!;
@@ -71,7 +82,7 @@ export default async () => {
       }
 
       if(shouldSkip(previous,latestInboundId,runStarted)){skipped++;continue;}
-      if(aiRuns>=MAX_AI_THREADS_PER_RUN)continue;
+      if(aiRuns>=MAX_AI_THREADS_PER_RUN){deferred++;continue;}
 
       try{
         if(operationMode==="shadow"){
@@ -93,19 +104,34 @@ export default async () => {
         }
         aiRuns++;
       }catch(error:any){
-        const message=String(error?.message||error||"Erro desconhecido");
+        const message=safeError(error);lastError=message;
         worker[thread.key]={
           latestInboundId,latestInboundDate:String(latest.date||""),lastFingerprint:null,
-          lastResult:"error",lastError:message.slice(0,600),updatedAt:new Date().toISOString(),
+          lastResult:"error",lastError:message,updatedAt:new Date().toISOString(),
           nextRetryAt:new Date(Date.now()+ERROR_RETRY_MS).toISOString()
         };
         errors++;
         console.error("VitalVeg AI thread processing failed:",thread.key,message);
-        if(/OPENAI_API_KEY|OPENAI_MODEL/.test(message))break;
+        if(/OPENAI_API_KEY|OPENAI_MODEL|AI_BUDGET_EXCEEDED|limite diário de IA/i.test(message))break;
       }
     }
 
     await setJson(WORKER_INDEX_KEY,worker);
+    const healthCode=lastError?classifyHealthError(lastError):(deferred?"backlog":"ok");
+    const healthStatus=errors?"degraded":(deferred?"backlog":"ok");
+    await setJson(WORKER_HEALTH_KEY,{
+      status:healthStatus,
+      code:healthCode,
+      lastRunAt:new Date().toISOString(),
+      fetchedAt:mailbox?.fetchedAt||null,
+      operationMode,
+      recentMessages:Array.isArray(mailbox?.messages)?mailbox.messages.length:0,
+      newMessages:mailbox?.newMessageIds?.length||0,
+      threads:threads.length,
+      aiRuns,processed,shadowEvaluated,baselineThreads:baseline,
+      processingErrors:errors,unchangedSkipped:skipped,deferredThreads:deferred,
+      lastError
+    });
     await appendActivity("mail_sync",{
       operationMode,
       fetchedAt:mailbox?.fetchedAt||new Date().toISOString(),
@@ -119,12 +145,15 @@ export default async () => {
       shadowEvaluated,
       baselineThreads:baseline,
       processingErrors:errors,
+      deferredThreads:deferred,
       unchangedSkipped:skipped,
       bootstrap:!!mailbox.bootstrap,
       sentWarning:mailbox?.sentWarning||""
     });
   }catch(error:any){
-    console.error("VitalVeg background mail sync failed:",String(error?.message||error));
+    const message=safeError(error);
+    try{await setJson(WORKER_HEALTH_KEY,{status:"degraded",code:"worker_error",lastRunAt:new Date().toISOString(),operationMode:null,processingErrors:1,deferredThreads:0,lastError:message});}catch{}
+    console.error("VitalVeg background mail sync failed:",message);
   }
 };
 
