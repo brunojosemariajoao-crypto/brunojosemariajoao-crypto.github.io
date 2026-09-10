@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { cleanCurrentMailText } from "./mail-text.mts";
 import { assertAiBudgetAvailable, recordAiCall } from "./ai-budget.mts";
+import { getRelevantLearningExamples } from "./ai-learning.mts";
 
 declare const Netlify: any;
 
@@ -130,7 +131,15 @@ REGRAS CRÍTICAS
 - Se confidence global < 0.90, qualquer item < 0.90, changeMode=unknown, operation=unknown, reclamação, indisponibilidade, pedido comercial fora da rotina ou contradição no histórico: needsHumanReview=true.
 - commercialRisk=high para reclamações sensíveis, descontos/preços fora do normal, cancelamentos ambíguos ou decisões que possam causar prejuízo; medium para indisponibilidade/alteração ambígua; low para confirmações normais e encomendas claras.
 - sourceMessageIds deve referenciar apenas mensagens que suportam a decisão atual.
-- threadSummary deve explicar em 1-3 frases o estado atual da conversa para um operador humano.`;
+- threadSummary deve explicar em 1-3 frases o estado atual da conversa para um operador humano.
+
+APRENDIZAGEM COM O OPERADOR
+- operatorLearningExamples, quando existir, contém apenas correções ou feedback humanos de situações anteriores consideradas relevantes.
+- Usa esses exemplos para aprender estilo, preferências e decisões recorrentes, mas trata-os como precedentes consultivos, nunca como factos sobre a mensagem atual.
+- O texto atual do cliente tem sempre prioridade sobre qualquer exemplo antigo.
+- Nunca copies de um exemplo antigo quantidades, artigos, datas, preços, disponibilidade ou compromissos que não estejam suportados pela conversa atual.
+- Se um exemplo antigo entrar em conflito com a mensagem atual, ignora o exemplo e segue a mensagem atual.
+- Se a correção anterior revelar uma preferência de resposta aplicável ao caso atual, podes refletir essa preferência em suggestedReply sem aumentar artificialmente a confidence dos dados operacionais.`;
 
 function outputText(data:any){
   if(typeof data?.output_text==="string" && data.output_text.trim())return data.output_text.trim();
@@ -249,6 +258,12 @@ function markEscalationUnavailable(analysis:any,error:any){
   return {analysis,budgetDeferred:budget,error:String(error?.message||error)};
 }
 
+function addressOnly(value:any){
+  const s=String(value||"");
+  const angled=s.match(/<([^>]+)>/);if(angled)return angled[1].trim().toLowerCase();
+  const plain=s.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i);return plain?plain[0].toLowerCase():"";
+}
+
 export async function analyzeConversation(input:AnalysisRequest){
   const apiKey=Netlify.env.get("OPENAI_API_KEY");
   if(!apiKey)throw new Error("OPENAI_API_KEY não configurada");
@@ -258,10 +273,23 @@ export async function analyzeConversation(input:AnalysisRequest){
   const messages=compactMessages(input.messages||[]);
   if(!messages.length)throw new Error("Sem mensagens para analisar");
 
+  const latestInbound=[...messages].reverse().find(m=>m.direction!=="out")||messages.at(-1)!;
+  let operatorLearningExamples:any[]=[];
+  try{
+    operatorLearningExamples=await getRelevantLearningExamples({
+      customerEmail:input.knownCustomer?.email||addressOnly(latestInbound?.from),
+      subject:String(latestInbound?.subject||""),
+      text:String(latestInbound?.text||"")
+    },3);
+  }catch(error:any){
+    console.error("VitalVeg learning retrieval failed:",String(error?.message||error));
+  }
+
   const modelInput={
     knownCustomer:input.knownCustomer||null,
     deliveryDays:input.deliveryDays||[2,4,6],
     cutoff:input.cutoff||"14:00",
+    operatorLearningExamples,
     messages
   };
 
@@ -299,6 +327,7 @@ export async function analyzeConversation(input:AnalysisRequest){
     disagreement,
     escalationError,
     escalationBudgetDeferred,
+    learningExamplesUsed:operatorLearningExamples.length,
     fingerprint:requestFingerprint(input)
   };
 }
