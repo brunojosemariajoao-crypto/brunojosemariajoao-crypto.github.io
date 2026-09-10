@@ -1,59 +1,72 @@
 (()=>{
   let latest=null,busy=false;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function numberValue(v){
-    if(typeof v==='number'&&Number.isFinite(v))return v;
-    const s=String(v??'').trim().replace(',','.');
-    return /^-?\d+(?:\.\d+)?$/.test(s)?Number(s):null;
-  }
-  function cleanQty(n){return Number.isInteger(n)?String(n):String(Math.round(n*1000)/1000).replace('.',',');}
-  function keyFor(i){return `${String(i.normalizedProduct||i.product||i.rawLine||'Artigo').trim().toLowerCase()}|${String(i.unit||'').trim().toLowerCase()}`;}
-  function aggregate(orders){
-    const map=new Map();
-    for(const order of orders||[]){
-      for(const item of order.items||[]){
-        const key=keyFor(item);const q=numberValue(item.quantity);
-        if(!map.has(key))map.set(key,{product:item.normalizedProduct||item.product||item.rawLine||'Artigo',unit:item.unit||'',numericTotal:0,numericCount:0,raw:[],uncertain:false,orders:0});
-        const a=map.get(key);a.orders++;
-        if(q!==null){a.numericTotal+=q;a.numericCount++;}else a.raw.push(String(item.quantity??'').trim());
-        if(item.uncertain)a.uncertain=true;
-      }
-    }
-    return [...map.values()].sort((a,b)=>String(a.product).localeCompare(String(b.product),'pt'));
+  function cleanQty(n){
+    if(n===null||n===undefined)return '—';
+    const value=Number(n);if(!Number.isFinite(value))return String(n);
+    return Number.isInteger(value)?String(value):String(Math.round(value*1000)/1000).replace('.',',');
   }
   function deliveryLabel(key){
     if(!key)return 'Sem próxima entrega';
     const d=new Date(`${key}T12:00:00Z`);
     return new Intl.DateTimeFormat('pt-PT',{weekday:'long',day:'2-digit',month:'long',timeZone:'UTC'}).format(d).replace(/^./,x=>x.toUpperCase());
   }
+  function detailLines(row){
+    const warnings=[];
+    if(row.uncertainLineCount){
+      warnings.push(`<div class="prep-line-warning"><strong>⚠ ${esc(row.uncertainLineCount)} linha${row.uncertainLineCount===1?'':'s'} incerta${row.uncertainLineCount===1?'':'s'}</strong>${(row.uncertainLines||[]).map(x=>`<span>${esc(x)}</span>`).join('')}</div>`);
+    }
+    if(row.nonNumericLineCount){
+      warnings.push(`<div class="prep-line-warning"><strong>⚠ ${esc(row.nonNumericLineCount)} quantidade${row.nonNumericLineCount===1?'':'s'} não somável${row.nonNumericLineCount===1?'':'eis'}</strong>${(row.nonNumericLines||[]).map(x=>`<span>${esc(x)}</span>`).join('')}</div>`);
+    }
+    return warnings.join('');
+  }
+  function rowHtml(row){
+    const confirmed=row.confirmedQuantity!==null
+      ?`<b>${esc(cleanQty(row.confirmedQuantity))}</b><span>${esc(row.unit||'')}</span>`
+      :'<b>—</b><span>sem total seguro</span>';
+    const review=row.requiresReview?'<em>⚠ confirmar</em>':'<em class="ok">✓ confirmado</em>';
+    return `<article class="prep-item ${row.requiresReview?'uncertain':''}">
+      <div class="prep-product"><strong>${esc(row.product||'Artigo')}</strong><small>${esc(row.customerCount||0)} cliente${row.customerCount===1?'':'s'} · ${esc(row.confirmedLineCount||0)} linha${row.confirmedLineCount===1?'':'s'} somada${row.confirmedLineCount===1?'':'s'}</small>${detailLines(row)}</div>
+      <div class="prep-qty">${confirmed}${review}</div>
+    </article>`;
+  }
   function render(){
     const content=document.querySelector('#content');if(!content)return;
-    const h=[...content.querySelectorAll('h2')].find(x=>(x.textContent||'').trim()==='O que precisa da tua atenção');
-    if(!h){document.querySelector('#aiPreparationSummary')?.remove();return;}
+    const onToday=document.querySelector('#mainNav [data-view="today"]')?.classList.contains('active');
+    if(!onToday){document.querySelector('#aiPreparationSummary')?.remove();return;}
     if(document.querySelector('#aiPreparationSummary'))return;
-    const orders=latest?.nextOrders||[];const date=latest?.summary?.nextDelivery||null;
-    const rows=aggregate(orders);
-    const uncertain=rows.filter(x=>x.uncertain).length;
-    const html=`<section id="aiPreparationSummary" class="panel prep-summary-panel">
-      <div class="panel-head"><div><h3>Resumo de preparação</h3><p>${esc(deliveryLabel(date))} · somado a partir das encomendas consolidadas</p></div><div class="page-actions">${date?`<button class="btn ghost" id="prepPrintBtn">Imprimir preparação</button>`:''}<button class="section-link" id="prepOrdersBtn">Ver encomendas</button></div></div>
+    const summary=latest?.preparationSummary||null;
+    const date=summary?.deliveryDate||latest?.summary?.nextDelivery||null;
+    const rows=Array.isArray(summary?.rows)?summary.rows:[];
+    const reviewCount=Number(summary?.reviewRowCount||0);
+    const html=`<section id="aiPreparationSummary" class="panel prep-summary-panel" aria-live="polite">
+      <div class="panel-head"><div><div class="prep-kicker">RESULTADO OPERACIONAL</div><h3>Resumo de preparação</h3><p>${esc(deliveryLabel(date))} · totais calculados no servidor a partir das encomendas consolidadas</p></div><div class="page-actions">${date?`<button class="btn ghost" id="prepPrintBtn">Imprimir preparação</button>`:''}<button class="section-link" id="prepOrdersBtn">Ver encomendas</button></div></div>
       <div class="panel-body">
-        ${rows.length?`<div class="prep-grid">${rows.map(a=>{
-          const qty=a.numericCount?cleanQty(a.numericTotal):a.raw.filter(Boolean).join(' + ')||'—';
-          return `<div class="prep-item ${a.uncertain?'uncertain':''}"><div><strong>${esc(a.product)}</strong><small>${esc(a.orders)} linha${a.orders===1?'':'s'} de cliente</small></div><div class="prep-qty"><b>${esc(qty)}</b><span>${esc(a.unit||'')}</span>${a.uncertain?'<em>⚠ confirmar</em>':''}</div></div>`;
-        }).join('')}</div>${uncertain?`<div class="prep-warning">⚠ ${uncertain} artigo${uncertain===1?' contém':'s contêm'} pelo menos uma linha incerta. A Central mostra-o, mas não o considera silenciosamente confirmado.</div>`:''}`:'<div class="mini-empty">Ainda não existem artigos para preparar na próxima entrega.</div>'}
-      </div></section>`;
+        <div class="prep-overview"><div><strong>${esc(summary?.orderCount||0)}</strong><span>encomendas</span></div><div><strong>${esc(summary?.rowCount||0)}</strong><span>artigos/unidades</span></div><div class="${reviewCount?'attention':''}"><strong>${esc(reviewCount)}</strong><span>totais a confirmar</span></div></div>
+        ${rows.length?`<div class="prep-grid">${rows.map(rowHtml).join('')}</div>`:'<div class="mini-empty">Ainda não existem artigos para preparar na próxima entrega.</div>'}
+        ${reviewCount?`<div class="prep-warning"><strong>⚠ Não feches a preparação ainda.</strong> Existem ${esc(reviewCount)} artigo${reviewCount===1?'':'s'} com pelo menos uma linha que a Central não somou automaticamente. Abre a encomenda correspondente e confirma.</div>`:'<div class="prep-all-good">✓ Todos os totais apresentados foram calculados apenas com linhas consideradas seguras.</div>'}
+      </div>
+    </section>`;
     const metrics=content.querySelector('.metric-grid');
-    if(metrics)metrics.insertAdjacentHTML('afterend',html);else h.closest('.page-head')?.insertAdjacentHTML('afterend',html);
+    if(metrics)metrics.insertAdjacentHTML('afterend',html);
+    else content.insertAdjacentHTML('afterbegin',html);
     document.querySelector('#prepOrdersBtn')?.addEventListener('click',()=>document.querySelector('#mainNav [data-view="deliveries"]')?.click());
-    document.querySelector('#prepPrintBtn')?.addEventListener('click',()=>window.open(`./print.html?date=${encodeURIComponent(date)}`,'_blank'));
+    document.querySelector('#prepPrintBtn')?.addEventListener('click',()=>window.open(`./print.html?date=${encodeURIComponent(date)}`,'_blank','noopener'));
   }
   async function load(){
     if(busy)return;busy=true;
-    try{const r=await fetch('/api/ai/state',{credentials:'include'});if(r.ok)latest=await r.json();}catch{}finally{busy=false;}
+    try{
+      const r=await fetch('/api/ai/state',{credentials:'include',headers:{'Cache-Control':'no-cache'}});
+      if(r.ok)latest=await r.json();
+    }catch{}finally{busy=false;}
     document.querySelector('#aiPreparationSummary')?.remove();render();
   }
   window.addEventListener('load',()=>{
     load();setInterval(load,60000);
-    const content=document.querySelector('#content');if(content)new MutationObserver(()=>render()).observe(content,{childList:true,subtree:false});
+    const content=document.querySelector('#content');
+    if(content)new MutationObserver(()=>render()).observe(content,{childList:true,subtree:false});
+    document.querySelector('#mainNav')?.addEventListener('click',()=>setTimeout(render,0));
+    document.querySelector('#refreshBtn')?.addEventListener('click',()=>setTimeout(load,500));
   });
 })();
