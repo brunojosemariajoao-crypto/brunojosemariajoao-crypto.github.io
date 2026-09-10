@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
 import { ensureSuggestedReply } from "./ai-reply-policy.mts";
+import { saveShadowFeedbackLearning } from "./ai-learning.mts";
 import { consolidateOrder, type AiAnalysis, type OrderEvent, type OrderRecord } from "./order-engine.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
 import {
@@ -116,8 +117,26 @@ export async function reviewShadowEvaluation(fingerprint:string,verdict:ShadowVe
   if(!["correct","partial","incorrect"].includes(verdict))throw new Error("Avaliação inválida");
   const current=await getShadowEvaluation(fingerprint);
   if(!current)throw new Error("Avaliação sombra não encontrada");
-  const next={...current,verdict,feedback:String(feedback||"").trim().slice(0,1200)||null,reviewedAt:new Date().toISOString()};
+  const cleanFeedback=String(feedback||"").trim().slice(0,1200);
+  const next={...current,verdict,feedback:cleanFeedback||null,reviewedAt:new Date().toISOString()};
   await store().setJSON(keyFor(fingerprint),next);
+
+  if((verdict==="partial"||verdict==="incorrect") && cleanFeedback){
+    try{
+      await saveShadowFeedbackLearning({
+        fingerprint,
+        customerEmail:current.customerEmail,
+        subject:current.subject,
+        sourceText:current.sourceText,
+        messageType:current.analysis?.messageType||null,
+        aiDraft:current.analysis?.suggestedReply||null,
+        verdict,
+        feedback:cleanFeedback
+      });
+    }catch(error:any){
+      console.error("VitalVeg shadow learning save failed:",String(error?.message||error));
+    }
+  }
   return next;
 }
 
