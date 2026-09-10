@@ -17,12 +17,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - name: Install exact production dependencies
+        run: npm ci --ignore-scripts
       - name: Validate frontend and backend syntax
         run: |
           node --check app.js
           node --check auth.js
           node --check v9/v9.js
           node --check v9/print.js
+          node --check v9/push.js
           for f in netlify/functions/*.mts; do
             node --experimental-strip-types --check "$f"
           done
