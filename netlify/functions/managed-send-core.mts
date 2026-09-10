@@ -1,5 +1,6 @@
 import { decideAutonomy } from "./autonomy-core.mts";
 import { sendVitalVegMail } from "./mail-send-core.mts";
+import { saveEditedReplyLearning } from "./ai-learning.mts";
 import {
   appendActivity, getAnalysis, getAutonomyPolicy, getOrder, getQueueItem,
   saveOrder, setQueueStatus
@@ -28,8 +29,6 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     if(draft!==String(item.suggestedReply||"").trim())throw new Error("O modo autónomo não pode alterar silenciosamente a resposta aprovada pela IA");
   }
 
-  // A assinatura e a versão HTML são aplicadas no nível mais baixo do envio.
-  // Assim nenhuma mensagem enviada pela Central pode sair sem identificação de gestão por IA.
   const sent=await sendVitalVegMail({
     to:item.to,
     subject:item.subject,
@@ -46,6 +45,27 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     await saveOrder(order);
   }
 
+  const aiDraft=String(item.suggestedReply||"").trim();
+  const editedByHuman=actor==="human" && !!aiDraft && draft!==aiDraft;
+  let learningExampleId:string|null=null;
+  if(editedByHuman){
+    try{
+      const latestInbound=[...(item.sourceMessages||[])].reverse().find((m:any)=>m?.direction!=="out")||null;
+      const learned=await saveEditedReplyLearning({
+        queueId,
+        customerEmail:item.to,
+        subject:item.subject,
+        sourceText:String(latestInbound?.text||""),
+        messageType:analysis?.messageType||null,
+        aiDraft,
+        finalText:draft
+      });
+      learningExampleId=learned?.id||null;
+    }catch(error:any){
+      console.error("VitalVeg learning save failed:",String(error?.message||error));
+    }
+  }
+
   await appendActivity("message_sent",{
     actor,
     queueId,
@@ -55,9 +75,10 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     sourceMessageId:item.sourceMessageId,
     to:item.to,
     subject:item.subject,
-    aiDraft:String(item.suggestedReply||""),
+    aiDraft,
     finalText:sent.finalText,
-    editedByHuman:actor==="human" && draft!==String(item.suggestedReply||"").trim(),
+    editedByHuman,
+    learningExampleId,
     messageId:sent.messageId,
     accepted:sent.accepted,
     rejected:sent.rejected,
@@ -67,5 +88,5 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     aiManaged:true
   });
 
-  return {...sent,queueId,actor,order};
+  return {...sent,queueId,actor,order,editedByHuman,learningExampleId};
 }
