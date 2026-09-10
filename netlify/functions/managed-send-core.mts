@@ -1,4 +1,5 @@
 import { decideAutonomy } from "./autonomy-core.mts";
+import { getAiOperationMode } from "./ai-mode.mts";
 import { sendVitalVegMail } from "./mail-send-core.mts";
 import { saveEditedReplyLearning } from "./ai-learning.mts";
 import {
@@ -22,6 +23,8 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
   const order=item.orderId?await getOrder(item.orderId):null;
 
   if(actor==="autonomy"){
+    const operationMode=await getAiOperationMode();
+    if(operationMode!=="autonomous")throw new Error("Envio autónomo bloqueado: o Funcionário Digital não está em modo Autónomo");
     if(!analysis)throw new Error("Não existe análise IA auditável para esta ação");
     const policy=await getAutonomyPolicy();
     const decision=decideAutonomy(analysis,order,policy);
