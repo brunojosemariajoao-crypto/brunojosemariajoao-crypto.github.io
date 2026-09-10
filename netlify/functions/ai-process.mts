@@ -1,6 +1,8 @@
 import type { Config, Context } from "@netlify/functions";
 import { verifyAppSession } from "./app-auth-core.mts";
 import { processConversation } from "./ai-orchestrator.mts";
+import { evaluateShadowConversation } from "./ai-shadow-core.mts";
+import { getAiOperationMode } from "./ai-mode.mts";
 
 function json(body:any,status=200){return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});}
 
@@ -12,13 +14,14 @@ export default async (req:Request, context:Context)=>{
   const threadKey=String(body?.threadKey||"").trim();
   if(!threadKey||!messages.length)return json({error:"Faltam threadKey ou mensagens"},400);
   try{
-    const result=await processConversation({
-      threadKey,
-      messages,
-      knownCustomer:body.knownCustomer||null,
-      force:body.force===true
-    });
-    return json(result);
+    const mode=await getAiOperationMode();
+    const common={threadKey,messages,knownCustomer:body.knownCustomer||null,force:body.force===true};
+    if(mode==="shadow"){
+      const evaluation=await evaluateShadowConversation(common);
+      return json({ok:true,mode,shadow:true,evaluation});
+    }
+    const result=await processConversation(common);
+    return json({...result,mode,shadow:false});
   }catch(error:any){
     const message=String(error?.message||"Não foi possível processar a conversa");
     const configError=/OPENAI_API_KEY|OPENAI_MODEL/.test(message);
