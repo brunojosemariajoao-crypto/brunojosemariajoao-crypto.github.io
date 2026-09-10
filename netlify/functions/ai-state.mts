@@ -3,6 +3,7 @@ import { verifyAppSession } from "./app-auth-core.mts";
 import { listActivity, listOrders, listQueue, getAutonomyPolicy } from "./ai-store.mts";
 import { getAiOperationMode } from "./ai-mode.mts";
 import { listShadowEvaluations, summarizeShadow } from "./ai-shadow-core.mts";
+import { buildPreparationSummary } from "./preparation-core.mts";
 
 function json(body:any,status=200){return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});}
 function localDateKey(date=new Date()){
@@ -23,6 +24,7 @@ export default async (req:Request, context:Context)=>{
     const dates=[...new Set(upcoming.map(o=>o.deliveryDate).filter(Boolean))].sort();
     const nextDelivery=dates[0]||null;
     const nextOrders=nextDelivery?upcoming.filter(o=>o.deliveryDate===nextDelivery):[];
+    const preparationSummary=buildPreparationSummary(nextOrders,nextDelivery);
     return json({
       ok:true,
       generatedAt:new Date().toISOString(),
@@ -37,6 +39,7 @@ export default async (req:Request, context:Context)=>{
         approvals:queue.filter(x=>x.kind==="approval").length,
         activeOrders:upcoming.length
       },
+      preparationSummary,
       nextOrders,
       needsMe:queue,
       recentActivity:activity,
