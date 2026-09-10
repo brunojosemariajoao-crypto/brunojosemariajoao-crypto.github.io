@@ -8,7 +8,10 @@ export function cleanCurrentMailText(value:any){
     /^On .{3,160} wrote:\s*$/mi,
     /^-{2,}\s*Mensagem original\s*-{2,}\s*$/mi,
     /^-{2,}\s*Original Message\s*-{2,}\s*$/mi,
-    /^_{5,}\s*$/m
+    /^_{5,}\s*$/m,
+    // Outlook/Exchange costuma converter o cabeçalho da mensagem citada para texto simples.
+    /^De:\s+.{3,240}$/mi,
+    /^From:\s+.{3,240}$/mi
   ];
   const positions=markers.map(re=>text.search(re)).filter(n=>n>0);
   if(positions.length)text=text.slice(0,Math.min(...positions));
