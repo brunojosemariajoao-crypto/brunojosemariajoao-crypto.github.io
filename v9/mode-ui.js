@@ -50,10 +50,13 @@
   }
   function installHealthBanner(worker,mode){
     const content=document.querySelector('#content');if(!content)return;
-    document.querySelector('#aiHealthBanner')?.remove();
-    const view=healthView(worker,mode);if(!view)return;
-    const banner=document.createElement('div');banner.id='aiHealthBanner';banner.className=`ai-health-banner ${view.level==='warn'?'':view.level}`;
-    banner.innerHTML=`<div class="ai-health-icon">${view.icon}</div><div class="ai-health-copy"><strong>${view.title}</strong><span>${view.copy}</span></div><div class="ai-health-meta">${view.meta||''}</div>`;
+    const existing=document.querySelector('#aiHealthBanner');
+    const view=healthView(worker,mode);
+    if(!view){existing?.remove();return;}
+    const className=`ai-health-banner ${view.level==='warn'?'':view.level}`;
+    const html=`<div class="ai-health-icon">${view.icon}</div><div class="ai-health-copy"><strong>${view.title}</strong><span>${view.copy}</span></div><div class="ai-health-meta">${view.meta||''}</div>`;
+    if(existing){existing.className=className;existing.innerHTML=html;return;}
+    const banner=document.createElement('div');banner.id='aiHealthBanner';banner.className=className;banner.innerHTML=html;
     content.insertAdjacentElement('afterbegin',banner);
   }
   function updateHealthStatus(worker,mode){
@@ -99,12 +102,18 @@
       }
       const old=document.querySelector('#aiModeControl');if(old)old.remove();installControl();
     }catch{
+      const synthetic={status:'degraded',code:'worker_error',lastRunAt:new Date().toISOString(),lastError:'Não foi possível ler o estado do funcionário digital.'};
       if(target)target.textContent='A verificar';
-      updateHealthStatus({status:'degraded',code:'worker_error',lastRunAt:new Date().toISOString(),lastError:'Não foi possível ler o estado do funcionário digital.'},current?.mode||'shadow');
+      updateHealthStatus(synthetic,current?.mode||'shadow');
+      installHealthBanner(synthetic,current?.mode||'shadow');
     }
   }
   window.addEventListener('load',()=>{
     refreshMode();setInterval(refreshMode,30000);
-    const content=document.querySelector('#content');if(content)new MutationObserver(()=>{installControl();if(lastState)installHealthBanner(lastState.workerHealth,current?.mode||'shadow');}).observe(content,{childList:true,subtree:false});
+    const content=document.querySelector('#content');
+    if(content)new MutationObserver(()=>{
+      installControl();
+      if(lastState&&!document.querySelector('#aiHealthBanner'))installHealthBanner(lastState.workerHealth,current?.mode||'shadow');
+    }).observe(content,{childList:true,subtree:false});
   });
 })();
