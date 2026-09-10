@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_AI_OPERATION_MODE, requiredModeConfirmation, validAiOperationMode } from "../netlify/functions/ai-mode.mts";
+import { DEFAULT_AI_OPERATION_MODE, enforceOperationModeDecision, requiredModeConfirmation, validAiOperationMode } from "../netlify/functions/ai-mode.mts";
 import { summarizeShadow } from "../netlify/functions/ai-shadow-core.mts";
 
 test("o funcionário digital nasce em modo Sombra",()=>{
@@ -15,6 +15,25 @@ test("a passagem a Assistente e Autónomo exige frases diferentes",()=>{
   assert.equal(requiredModeConfirmation("shadow"),"");
   assert.equal(requiredModeConfirmation("assist"),"ATIVAR ASSISTENTE");
   assert.equal(requiredModeConfirmation("autonomous"),"ATIVAR FUNCIONARIO AUTONOMO");
+});
+
+test("modo Assistente rebaixa qualquer tentativa de autoexecução para aprovação",()=>{
+  const d=enforceOperationModeDecision("assist",{mode:"auto_execute",canSend:true,reasons:["Política permitiria"]});
+  assert.equal(d.mode,"await_approval");
+  assert.equal(d.canSend,true);
+  assert.ok(d.reasons.some((x:string)=>/aprovação humana/i.test(x)));
+});
+
+test("modo Sombra bloqueia todas as ações operacionais",()=>{
+  const d=enforceOperationModeDecision("shadow",{mode:"auto_execute",canSend:true,reasons:[]});
+  assert.equal(d.mode,"ignore");
+  assert.equal(d.canSend,false);
+  assert.ok(d.reasons.some((x:string)=>/Modo Sombra/i.test(x)));
+});
+
+test("modo Autónomo não altera uma decisão que a política autorizou",()=>{
+  const original={mode:"auto_execute",canSend:true,reasons:["Autorizado"]};
+  assert.equal(enforceOperationModeDecision("autonomous",original),original);
 });
 
 test("a qualidade sombra penaliza parcialmente os casos parciais",()=>{
