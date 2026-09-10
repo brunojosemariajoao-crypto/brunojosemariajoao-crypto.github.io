@@ -1,6 +1,6 @@
 (()=>{
   const labels={shadow:'Sombra · zero envios',assist:'Assistente · tu aprovas',autonomous:'Autónomo · regras ativas'};
-  let current=null;
+  let current=null,lastState=null;
 
   async function api(url,options={}){
     const res=await fetch(url,{credentials:'include',...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
@@ -36,6 +36,33 @@
     if(pageHead)pageHead.insertAdjacentHTML('afterend',controlHtml(current||{mode:'shadow'}));
     content.querySelectorAll('[data-ai-mode]').forEach(btn=>btn.addEventListener('click',()=>changeMode(btn.dataset.aiMode)));
   }
+  function healthView(worker,mode){
+    const h=worker||{};const now=Date.now();const at=h.lastRunAt?new Date(h.lastRunAt).getTime():0;
+    const stale=at&&Number.isFinite(at)&&now-at>12*60*1000;
+    if(stale)return {level:'error',title:'Funcionário Digital sem verificação recente',copy:'A sincronização automática devia executar de 5 em 5 minutos. É preciso verificar o serviço antes de confiar no estado apresentado.',meta:`Última execução ${Math.round((now-at)/60000)} min atrás`,icon:'!'};
+    if(h.code==='mailbox_unconfigured')return {level:'error',title:'Funcionário Digital parado',copy:'A caixa de email ainda não está configurada no servidor. Nenhuma mensagem pode ser analisada.',meta:'Email por configurar',icon:'!'};
+    if(h.code==='ai_not_configured')return {level:'error',title:'IA ainda não configurada',copy:'Os emails podem ser sincronizados, mas o funcionário digital não está a analisá-los enquanto faltar a configuração da IA.',meta:'OPENAI_API_KEY necessária',icon:'!'};
+    if(h.code==='ai_budget_reached')return {level:'warn',title:'Limite diário da IA atingido',copy:'Novas análises estão em pausa por segurança. Os emails não são apagados e voltarão a ser processados quando houver orçamento disponível.',meta:'Consumo protegido',icon:'!'};
+    if(h.status==='degraded')return {level:'error',title:'Atenção: houve erro no processamento',copy:'Pelo menos uma conversa não foi analisada corretamente. A Central irá tentar novamente e não deve considerar esta fila totalmente tratada.',meta:h.lastError?'Erro registado':'Revisão necessária',icon:'!'};
+    if(h.status==='backlog'||Number(h.deferredThreads||0)>0)return {level:'warn',title:'Existem conversas em fila para a IA',copy:'O limite de processamento desta ronda foi atingido. As restantes conversas ficam guardadas para a próxima passagem automática.',meta:`${Number(h.deferredThreads||0)} pendente${Number(h.deferredThreads||0)===1?'':'s'}`,icon:'…'};
+    if(h.status==='unknown'||h.code==='not_run_yet'||!h.lastRunAt)return {level:'info',title:'A aguardar a primeira verificação automática',copy:'O funcionário digital ainda não registou uma passagem completa desde esta instalação.',meta:labels[mode]||'',icon:'i'};
+    return null;
+  }
+  function installHealthBanner(worker,mode){
+    const content=document.querySelector('#content');if(!content)return;
+    document.querySelector('#aiHealthBanner')?.remove();
+    const view=healthView(worker,mode);if(!view)return;
+    const banner=document.createElement('div');banner.id='aiHealthBanner';banner.className=`ai-health-banner ${view.level==='warn'?'':view.level}`;
+    banner.innerHTML=`<div class="ai-health-icon">${view.icon}</div><div class="ai-health-copy"><strong>${view.title}</strong><span>${view.copy}</span></div><div class="ai-health-meta">${view.meta||''}</div>`;
+    content.insertAdjacentElement('afterbegin',banner);
+  }
+  function updateHealthStatus(worker,mode){
+    const dot=document.querySelector('#aiStatusDot');const mini=document.querySelector('#miniAiDot');const text=document.querySelector('#aiStatusText');const miniText=document.querySelector('#miniAiStatus');
+    const view=healthView(worker,mode);
+    [dot,mini].forEach(el=>{el?.classList.remove('ok','warn','error');el?.classList.add(view?(view.level==='info'?'warn':view.level):'ok');});
+    if(view){if(text)text.textContent=view.title;if(miniText)miniText.textContent=view.level==='error'?'IA precisa de atenção':'IA com aviso';}
+    else{if(text)text.textContent=mode==='shadow'?'Sombra a observar':mode==='assist'?'A analisar e preparar':'Autonomia operacional';if(miniText)miniText.textContent='IA operacional';}
+  }
   async function changeMode(mode){
     try{
       if(mode==='assist'){
@@ -48,19 +75,20 @@
         toast('Modo Sombra ativado. A IA observa sem executar ações.');
       }
       await refreshMode();
-      if(typeof window.loadAll==='function')await window.loadAll(true);
-      else location.reload();
+      location.reload();
     }catch(e){toast(e.message||'Não foi possível alterar o modo da IA.');}
   }
   async function refreshMode(){
     const target=document.querySelector('#autonomyStatusText');
     try{
-      const data=await api('/api/ai/mode');current=data;
-      if(target)target.textContent=labels[data.mode]||'A verificar';
+      const data=await api('/api/ai/state');lastState=data;current={mode:data.operationMode||'shadow'};
+      if(target)target.textContent=labels[current.mode]||'A verificar';
+      updateHealthStatus(data.workerHealth,current.mode);
+      installHealthBanner(data.workerHealth,current.mode);
       const strip=document.querySelector('.status-strip');
       if(strip){
         let link=document.querySelector('#shadowValidationLink');
-        if(data.mode==='shadow'){
+        if(current.mode==='shadow'){
           if(!link){
             link=document.createElement('a');link.id='shadowValidationLink';link.href='./shadow.html';
             link.textContent='Validar decisões da IA';
@@ -70,10 +98,13 @@
         }else if(link)link.remove();
       }
       const old=document.querySelector('#aiModeControl');if(old)old.remove();installControl();
-    }catch{if(target)target.textContent='A verificar';}
+    }catch{
+      if(target)target.textContent='A verificar';
+      updateHealthStatus({status:'degraded',code:'worker_error',lastRunAt:new Date().toISOString(),lastError:'Não foi possível ler o estado do funcionário digital.'},current?.mode||'shadow');
+    }
   }
   window.addEventListener('load',()=>{
     refreshMode();setInterval(refreshMode,30000);
-    const content=document.querySelector('#content');if(content)new MutationObserver(()=>installControl()).observe(content,{childList:true,subtree:false});
+    const content=document.querySelector('#content');if(content)new MutationObserver(()=>{installControl();if(lastState)installHealthBanner(lastState.workerHealth,current?.mode||'shadow');}).observe(content,{childList:true,subtree:false});
   });
 })();
