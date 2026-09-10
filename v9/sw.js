@@ -9,14 +9,15 @@ self.addEventListener('push',event=>{
     body:data.body||'O funcionário digital precisa da tua atenção.',
     tag:data.tag||'vitalveg',
     renotify:true,
-    data:{url:data.url||'/v9/'}
+    data:{url:data.url||'./'}
   };
   event.waitUntil(self.registration.showNotification(title,options));
 });
 
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
-  const target=new URL(event.notification.data?.url||'/v9/',self.location.origin).href;
+  // O scope é /v9/ durante os testes e / em produção. Assim o mesmo SW funciona nos dois.
+  const target=new URL(event.notification.data?.url||'./',self.registration.scope).href;
   event.waitUntil((async()=>{
     const all=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     for(const client of all){
