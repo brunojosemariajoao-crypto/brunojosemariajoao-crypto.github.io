@@ -10,6 +10,13 @@ test("remove encomenda antiga citada num RE em português",()=>{
   assert.equal(clean.includes("6 molhos nabiças"),false);
 });
 
+test("remove histórico Outlook De/Enviado/Para/Assunto",()=>{
+  const body=`Boa tarde, passa para 1 cx de alface.\n\nDe: Loja 4 <loja4@example.com>\nEnviado: segunda-feira, 7 de setembro de 2026 15:20\nPara: geral@vitalveg.pt\nAssunto: Encomenda\n\n4 cx alface\n6 molhos nabiças`;
+  const clean=cleanCurrentMailText(body);
+  assert.equal(clean,"Boa tarde, passa para 1 cx de alface.");
+  assert.equal(clean.includes("4 cx alface"),false);
+});
+
 test("remove linhas citadas com > sem apagar a mensagem atual",()=>{
   const body=`Bom dia, fica só 1 cx de alface.\n> 4 cx alface\n> 6 molhos nabiças`;
   const clean=cleanCurrentMailText(body);
