@@ -52,8 +52,8 @@ export async function sendVitalVegMail(input:SendMailInput){
   const references=Array.isArray(input?.references)?input.references.filter(Boolean).map(String):[];
   if(!to||!subject||!draft)throw new Error("Faltam dados obrigatórios para enviar o email");
 
-  const rendered=formatManagedEmail(draft);
   const actor=input.actor||"system";
+  const rendered=formatManagedEmail(draft,actor);
   const {email:user,password}=await getStoredCredentials();
   if(user!==ALLOWED_ACCOUNT)throw new Error("Conta de email não autorizada");
   const transporter=nodemailer.createTransport({
