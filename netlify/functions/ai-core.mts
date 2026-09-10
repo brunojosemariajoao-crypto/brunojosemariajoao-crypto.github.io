@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { cleanCurrentMailText } from "./mail-text.mts";
+import { assertAiBudgetAvailable, recordAiCall } from "./ai-budget.mts";
 
 declare const Netlify: any;
 
@@ -157,6 +158,7 @@ function normalizeAnalysis(parsed:any){
 }
 
 async function runModel(apiKey:string,model:string,input:any,reviewOf:any=null){
+  await assertAiBudgetAvailable();
   const reviewer=reviewOf?`\n\nSEGUNDA LEITURA\nRecebeste também a análise preliminar de outro modelo. Revê-a contra as mensagens originais. Não a aceites por autoridade. Corrige apenas quando o texto do cliente sustentar a correção. Se continuar ambíguo, mantém a ambiguidade e exige revisão humana.`:"";
   const body:any={
     model,
@@ -176,7 +178,11 @@ async function runModel(apiKey:string,model:string,input:any,reviewOf:any=null){
   if(!res.ok)throw new Error(data?.error?.message||`Falha IA (${res.status})`);
   const text=outputText(data);
   if(!text)throw new Error("A IA não devolveu análise estruturada");
-  return {analysis:normalizeAnalysis(JSON.parse(text)),model:data.model||model,responseId:data.id||null,usage:data.usage||null};
+  const result={analysis:normalizeAnalysis(JSON.parse(text)),model:data.model||model,responseId:data.id||null,usage:data.usage||null,budget:null as any};
+  try{result.budget=await recordAiCall(result.model,result.usage);}catch(error:any){
+    console.error("VitalVeg AI usage accounting failed:",String(error?.message||error));
+  }
+  return result;
 }
 
 function norm(value:any){return String(value??"").trim().toLowerCase().replace(/\s+/g," ");}
@@ -218,7 +224,6 @@ function markModelDisagreement(primary:any,secondary:any){
   secondary.reviewReasons=[...new Set([...(secondary.reviewReasons||[]),reason])];
   secondary.confidence=Math.min(Number(secondary.confidence||0),0.79);
 
-  // Nenhuma linha identificada na primeira leitura pode desaparecer silenciosamente na segunda.
   const secondaryKeys=new Set((secondary.items||[]).map((x:any)=>`${norm(x?.rawLine)}|${norm(x?.product)}|${norm(x?.unit)}`));
   for(const item of primary.items||[]){
     const key=`${norm(item?.rawLine)}|${norm(item?.product)}|${norm(item?.unit)}`;
@@ -230,6 +235,18 @@ function markModelDisagreement(primary:any,secondary:any){
     item.confidence=Math.min(Number(item?.confidence||0),0.79);
   }
   return {analysis:secondary,disagreement:true};
+}
+
+function markEscalationUnavailable(analysis:any,error:any){
+  const code=String(error?.code||"");
+  const budget=code==="AI_BUDGET_EXCEEDED"||/limite diário de IA/i.test(String(error?.message||""));
+  const reason=budget
+    ?"A segunda leitura de IA foi adiada porque o limite diário de segurança foi atingido. Confirma esta mensagem manualmente."
+    :"A segunda leitura de IA não ficou disponível. Por segurança, confirma esta interpretação manualmente.";
+  analysis.needsHumanReview=true;
+  analysis.confidence=Math.min(Number(analysis.confidence||0),0.84);
+  analysis.reviewReasons=[...new Set([...(analysis.reviewReasons||[]),reason])];
+  return {analysis,budgetDeferred:budget,error:String(error?.message||error)};
 }
 
 export async function analyzeConversation(input:AnalysisRequest){
@@ -249,18 +266,27 @@ export async function analyzeConversation(input:AnalysisRequest){
   };
 
   const primary=await runModel(apiKey,primaryModel,modelInput);
-  const calls:any[]=[{model:primary.model,responseId:primary.responseId,usage:primary.usage,role:"primary"}];
+  const calls:any[]=[{model:primary.model,responseId:primary.responseId,usage:primary.usage,role:"primary",budget:primary.budget}];
   let chosen=primary.analysis;
   let escalated=false;
   let disagreement=false;
+  let escalationError:string|null=null;
+  let escalationBudgetDeferred=false;
 
   if(escalationModel && escalationModel!==primaryModel && shouldEscalateAnalysis(primary.analysis)){
-    const secondary=await runModel(apiKey,escalationModel,modelInput,primary.analysis);
-    calls.push({model:secondary.model,responseId:secondary.responseId,usage:secondary.usage,role:"reviewer"});
-    const compared=markModelDisagreement(primary.analysis,secondary.analysis);
-    chosen=compared.analysis;
-    escalated=true;
-    disagreement=compared.disagreement;
+    try{
+      const secondary=await runModel(apiKey,escalationModel,modelInput,primary.analysis);
+      calls.push({model:secondary.model,responseId:secondary.responseId,usage:secondary.usage,role:"reviewer",budget:secondary.budget});
+      const compared=markModelDisagreement(primary.analysis,secondary.analysis);
+      chosen=compared.analysis;
+      escalated=true;
+      disagreement=compared.disagreement;
+    }catch(error:any){
+      const safe=markEscalationUnavailable(primary.analysis,error);
+      chosen=safe.analysis;
+      escalationError=safe.error;
+      escalationBudgetDeferred=safe.budgetDeferred;
+    }
   }
 
   return {
@@ -271,6 +297,8 @@ export async function analyzeConversation(input:AnalysisRequest){
     calls,
     escalated,
     disagreement,
+    escalationError,
+    escalationBudgetDeferred,
     fingerprint:requestFingerprint(input)
   };
 }
