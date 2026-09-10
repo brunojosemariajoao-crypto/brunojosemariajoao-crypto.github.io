@@ -7,6 +7,17 @@ const STORE_NAME="vitalveg-v9";
 function store(){return getStore(STORE_NAME,{consistency:"strong"});}
 function threadId(threadKey:string){return createHash("sha256").update(threadKey).digest("hex").slice(0,24);}
 
+export type QueueSourceMessage={
+  id:string|null;
+  messageId:string|null;
+  date:string|null;
+  direction:"in"|"out";
+  from:string|null;
+  to:string|null;
+  subject:string|null;
+  text:string;
+};
+
 export type QueueItem={
   id:string;
   threadKey:string;
@@ -22,6 +33,7 @@ export type QueueItem={
   inReplyTo:string|null;
   references:string[];
   sourceMessageId:string|null;
+  sourceMessages?:QueueSourceMessage[];
   status:"open"|"approved"|"rejected"|"resolved";
   createdAt:string;
   updatedAt:string;
