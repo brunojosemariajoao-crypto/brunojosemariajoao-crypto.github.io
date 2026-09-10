@@ -59,7 +59,7 @@ export async function sendPushToOperators(payload:{title:string;body:string;url?
   const entries=await listPushSubscriptions();
   if(!entries.length)return {sent:0,failed:0,publicKey};
   let sent=0,failed=0;
-  const data=JSON.stringify({title:payload.title,body:payload.body,url:payload.url||"/v9/",tag:payload.tag||"vitalveg"});
+  const data=JSON.stringify({title:payload.title,body:payload.body,url:payload.url||"./",tag:payload.tag||"vitalveg"});
   for(const entry of entries){
     try{
       await webpush.sendNotification(entry.subscription,data,{TTL:300,urgency:"high"} as any);
