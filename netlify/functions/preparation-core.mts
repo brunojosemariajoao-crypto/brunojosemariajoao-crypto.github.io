@@ -50,8 +50,8 @@ export function buildPreparationSummary(orders:OrderRecord[]|any[],deliveryDate:
     uncertainLines:string[];nonNumericLines:string[];
   }>();
 
-  for(const order of safe){
-    const customerKey=clean(order.id||order.customerEmail||order.storeName||order.customerName||Math.random());
+  for(const [orderIndex,order] of safe.entries()){
+    const customerKey=clean(order.id||order.customerEmail||order.storeName||order.customerName)||`ordem-${orderIndex+1}`;
     for(const item of Array.isArray(order.items)?order.items:[]){
       const key=itemKey(item);
       if(!map.has(key))map.set(key,{
