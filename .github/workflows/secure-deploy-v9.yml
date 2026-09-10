@@ -39,6 +39,7 @@ jobs:
           set -euo pipefail
           node --check v9/v9.js
           node --check v9/review-ux.js
+          node --check v9/mode-ui.js
           node --check v9/shadow.js
           node --check v9/print.js
           node --check v9/push.js
@@ -53,7 +54,7 @@ jobs:
           DEST=/tmp/vitalveg-v9-deploy
           rm -rf "$DEST"
           mkdir -p "$DEST/netlify/functions" "$DEST/assets"
-          cp v9/index.html v9/v9.css v9/v9.js v9/review-ux.js v9/shadow.html v9/shadow.css v9/shadow.js v9/print.html v9/print.css v9/print.js v9/push.js v9/sw.js "$DEST/"
+          cp v9/index.html v9/v9.css v9/v9.js v9/review-ux.js v9/mode-ui.js v9/shadow.html v9/shadow.css v9/shadow.js v9/print.html v9/print.css v9/print.js v9/push.js v9/sw.js "$DEST/"
           if [ -f v9/manifest.json ]; then cp v9/manifest.json "$DEST/"; fi
           cp assets/vitalveg-logo-original.png "$DEST/assets/"
           cp netlify/functions/*.mts "$DEST/netlify/functions/"
