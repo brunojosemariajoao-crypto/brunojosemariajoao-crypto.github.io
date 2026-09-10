@@ -57,6 +57,10 @@ function cleanAddress(value:any):string{
   return String(value);
 }
 function messageKey(folder:string,uidValidity:string,uid:number){return `${folder}|${uidValidity}|${uid}`;}
+function semanticMessageKey(message:V9MailMessage){
+  const mid=String(message?.messageId||"").trim().toLowerCase();
+  return mid?`mid:${mid}`:`uid:${message.id}`;
+}
 function safeDate(value:any){
   const d=value instanceof Date?value:new Date(value||0);
   return Number.isNaN(d.getTime())?new Date(0).toISOString():d.toISOString();
@@ -67,8 +71,11 @@ export function mergeRecentMessages(existing:V9MailMessage[],incoming:V9MailMess
   const map=new Map<string,V9MailMessage>();
   for(const m of [...(existing||[]),...(incoming||[])]){
     if(!m?.id)continue;
-    const prior=map.get(m.id);
-    if(!prior || new Date(m.date).getTime()>=new Date(prior.date).getTime())map.set(m.id,m);
+    const key=semanticMessageKey(m);
+    const prior=map.get(key);
+    // Se o servidor e a Central guardarem ambos a mesma mensagem enviada,
+    // o Message-ID é a identidade canónica e só uma cópia chega à IA.
+    if(!prior || new Date(m.date).getTime()>=new Date(prior.date).getTime())map.set(key,m);
   }
   return [...map.values()]
     .sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime())
@@ -184,7 +191,7 @@ export async function syncV9Mailbox():Promise<V9MailSnapshot>{
       if(sentFolder)sent=await syncFolder(client,sentFolder,"out");
     }catch(error:any){sentWarning=String(error?.message||"Não foi possível sincronizar Enviados");}
 
-    const incoming=[...inbox.messages,...sent.messages];
+    const incoming=mergeRecentMessages([], [...inbox.messages,...sent.messages], Math.max(1,inbox.messages.length+sent.messages.length));
     if(incoming.length)await archiveByDay(incoming);
     const previous=await getV9MailSnapshot();
     const recent=mergeRecentMessages(previous?.messages||[],incoming,RECENT_MESSAGE_LIMIT);
