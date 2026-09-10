@@ -1,4 +1,3 @@
-import { appendAiSignature } from "./ai-core.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
 import { sendVitalVegMail } from "./mail-send-core.mts";
 import {
@@ -29,13 +28,15 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     if(draft!==String(item.suggestedReply||"").trim())throw new Error("O modo autónomo não pode alterar silenciosamente a resposta aprovada pela IA");
   }
 
-  const finalText=appendAiSignature(draft);
+  // A assinatura e a versão HTML são aplicadas no nível mais baixo do envio.
+  // Assim nenhuma mensagem enviada pela Central pode sair sem identificação de gestão por IA.
   const sent=await sendVitalVegMail({
     to:item.to,
     subject:item.subject,
-    text:finalText,
+    text:draft,
     inReplyTo:item.inReplyTo||undefined,
-    references:item.references||[]
+    references:item.references||[],
+    actor
   });
 
   await setQueueStatus(queueId,"resolved");
@@ -55,15 +56,16 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     to:item.to,
     subject:item.subject,
     aiDraft:String(item.suggestedReply||""),
-    finalText,
+    finalText:sent.finalText,
     editedByHuman:actor==="human" && draft!==String(item.suggestedReply||"").trim(),
     messageId:sent.messageId,
     accepted:sent.accepted,
     rejected:sent.rejected,
     savedToSent:sent.savedToSent,
     sentFolder:sent.sentFolder,
-    sentWarning:sent.sentWarning
+    sentWarning:sent.sentWarning,
+    aiManaged:true
   });
 
-  return {...sent,queueId,actor,finalText,order};
+  return {...sent,queueId,actor,order};
 }
