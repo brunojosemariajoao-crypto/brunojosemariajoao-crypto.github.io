@@ -19,6 +19,16 @@ export function requiredModeConfirmation(mode:AiOperationMode){
   return "";
 }
 
+export function enforceOperationModeDecision(mode:AiOperationMode,decision:any){
+  if(mode==="shadow"){
+    return {...decision,mode:"ignore",canSend:false,reasons:[...new Set([...(decision?.reasons||[]),"Modo Sombra: nenhuma ação operacional é permitida."])]};
+  }
+  if(mode==="assist" && decision?.mode==="auto_execute"){
+    return {...decision,mode:"await_approval",reasons:[...new Set([...(decision?.reasons||[]),"O modo operacional é Assistente; qualquer envio exige aprovação humana."])]};
+  }
+  return decision;
+}
+
 export async function setAiOperationMode(mode:AiOperationMode,confirmationText=""){
   if(!validAiOperationMode(mode))throw new Error("Modo operacional de IA inválido");
   const before=await getAiOperationMode();
@@ -40,8 +50,6 @@ export async function setAiOperationMode(mode:AiOperationMode,confirmationText="
     }
   }
 
-  // Assistente significa sempre aprovação humana. Mesmo que exista uma política
-  // antiga de nível 2/3, voltar a Assistente fecha imediatamente o envio autónomo.
   if(mode==="assist"){
     const policy=await getAutonomyPolicy();
     if(policy.level!==1)await saveAutonomyPolicy({...policy,level:1});
