@@ -25,6 +25,7 @@ jobs:
           node --check app.js
           node --check auth.js
           node --check v9/v9.js
+          node --check v9/review-ux.js
           node --check v9/print.js
           node --check v9/push.js
           for f in netlify/functions/*.mts; do
