@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
+import { ensureSuggestedReply } from "./ai-reply-policy.mts";
 import { consolidateOrder, resolveDeliveryDate, type AiAnalysis, type OrderEvent, type OrderRecord } from "./order-engine.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
 import { executeManagedSend } from "./managed-send-core.mts";
@@ -30,6 +31,21 @@ function latestInbound(messages:any[]){
 }
 function queueId(threadKey:string,fingerprint:string){return `q_${threadHash(threadKey)}_${fingerprint.slice(0,12)}`;}
 function replySubject(value:string){const s=String(value||"(sem assunto)").trim();return /^re\s*:/i.test(s)?s:`Re: ${s}`;}
+function sourceMessages(messages:any[]){
+  return [...messages]
+    .sort((a,b)=>new Date(a?.date||0).getTime()-new Date(b?.date||0).getTime())
+    .slice(-12)
+    .map(m=>({
+      id:m?.id?String(m.id):null,
+      messageId:m?.messageId?String(m.messageId):null,
+      date:m?.date?String(m.date):null,
+      direction:m?.direction==="out"?"out" as const:"in" as const,
+      from:m?.from?String(m.from):null,
+      to:m?.to?String(m.to):null,
+      subject:m?.subject?String(m.subject):null,
+      text:String(m?.text||"").slice(0,12000)
+    }));
+}
 
 export async function processConversation(input:ProcessConversationInput){
   const threadKey=String(input?.threadKey||"").trim();
@@ -47,7 +63,7 @@ export async function processConversation(input:ProcessConversationInput){
   const aiResult:any=cached?.analysis?cached:await analyzeConversation(analysisInput);
   if(!cached)await saveAnalysis(fingerprint,aiResult);
 
-  const analysis:AiAnalysis=aiResult.analysis;
+  const analysis:AiAnalysis=ensureSuggestedReply(aiResult.analysis) as AiAnalysis;
   const latest=latestInbound(messages);
   if(!latest)throw new Error("A conversa não contém mensagem recebida para processar");
   const receivedAt=String(latest?.date||new Date().toISOString());
@@ -95,7 +111,8 @@ export async function processConversation(input:ProcessConversationInput){
       subject:replySubject(String(latest?.subject||"")),
       inReplyTo:String(latest?.messageId||"")||null,
       references,
-      sourceMessageId
+      sourceMessageId,
+      sourceMessages:sourceMessages(messages)
     });
   }
 
@@ -119,7 +136,8 @@ export async function processConversation(input:ProcessConversationInput){
         subject:queueItem.subject,
         inReplyTo:queueItem.inReplyTo,
         references:queueItem.references||[],
-        sourceMessageId:queueItem.sourceMessageId
+        sourceMessageId:queueItem.sourceMessageId,
+        sourceMessages:queueItem.sourceMessages||sourceMessages(messages)
       });
       await appendActivity("autonomy_failed",{threadKey,queueItemId:queueItem.id,error:autoSendError});
     }
