@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { ALLOWED_ACCOUNT, getStoredCredentials } from "./mail-core.mts";
+import { formatManagedEmail } from "./ai-email-format.mts";
 
 const SMTP_HOST="smtp.securemail.pro";
 const SMTP_PORT=465;
@@ -13,6 +14,7 @@ export type SendMailInput={
   text:string;
   inReplyTo?:string;
   references?:string[];
+  actor?:"human"|"autonomy"|"system";
 };
 
 async function findSentFolder(client:ImapFlow):Promise<string|null>{
@@ -45,11 +47,13 @@ async function saveCopyToSent(user:string,password:string,mailOptions:any,messag
 export async function sendVitalVegMail(input:SendMailInput){
   const to=String(input?.to||"").trim();
   const subject=String(input?.subject||"").trim();
-  const text=String(input?.text||"").trim();
+  const draft=String(input?.text||"").trim();
   const inReplyTo=String(input?.inReplyTo||"").trim();
   const references=Array.isArray(input?.references)?input.references.filter(Boolean).map(String):[];
-  if(!to||!subject||!text)throw new Error("Faltam dados obrigatórios para enviar o email");
+  if(!to||!subject||!draft)throw new Error("Faltam dados obrigatórios para enviar o email");
 
+  const rendered=formatManagedEmail(draft);
+  const actor=input.actor||"system";
   const {email:user,password}=await getStoredCredentials();
   if(user!==ALLOWED_ACCOUNT)throw new Error("Conta de email não autorizada");
   const transporter=nodemailer.createTransport({
@@ -57,7 +61,11 @@ export async function sendVitalVegMail(input:SendMailInput){
     connectionTimeout:12000,greetingTimeout:12000,socketTimeout:25000
   });
   const mailOptions:any={
-    from:user,to,subject,text,
+    from:user,to,subject,text:rendered.text,html:rendered.html,
+    headers:{
+      "X-VitalVeg-Managed-By":"AI-Central",
+      "X-VitalVeg-AI-Mode":actor
+    },
     ...(inReplyTo?{inReplyTo}:{}),
     ...(references.length?{references}:{})
   };
@@ -74,6 +82,10 @@ export async function sendVitalVegMail(input:SendMailInput){
     smtpResponse:String(info.response||""),
     savedToSent:sentCopy.saved,
     sentFolder:sentCopy.folder,
-    sentWarning:sentCopy.warning
+    sentWarning:sentCopy.warning,
+    finalText:rendered.text,
+    finalHtml:rendered.html,
+    aiManaged:true,
+    actor
   };
 }
