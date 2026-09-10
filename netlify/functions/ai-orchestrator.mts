@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
 import { ensureSuggestedReply } from "./ai-reply-policy.mts";
+import { getAiOperationMode } from "./ai-mode.mts";
 import { consolidateOrder, resolveDeliveryDate, type AiAnalysis, type OrderEvent, type OrderRecord } from "./order-engine.mts";
 import { decideAutonomy } from "./autonomy-core.mts";
 import { executeManagedSend } from "./managed-send-core.mts";
@@ -52,6 +53,11 @@ export async function processConversation(input:ProcessConversationInput){
   const messages=Array.isArray(input?.messages)?input.messages:[];
   if(!threadKey||!messages.length)throw new Error("Faltam threadKey ou mensagens");
 
+  // Fail-safe: o orquestrador operacional nunca pode executar durante o modo Sombra.
+  // O modo Sombra tem um caminho próprio que não grava encomendas nem cria envios.
+  const operationMode=await getAiOperationMode();
+  if(operationMode==="shadow")throw new Error("O modo Sombra não permite processamento operacional");
+
   const analysisInput={messages,knownCustomer:input.knownCustomer||null,deliveryDays:[2,4,6],cutoff:"14:00"};
   const fingerprint=requestFingerprint(analysisInput);
   if(!input.force){
@@ -86,7 +92,14 @@ export async function processConversation(input:ProcessConversationInput){
   }
 
   const policy=await getAutonomyPolicy();
-  const autonomy=decideAutonomy(analysis,order,policy);
+  let autonomy=decideAutonomy(analysis,order,policy);
+  if(operationMode!=="autonomous" && autonomy.mode==="auto_execute"){
+    autonomy={
+      ...autonomy,
+      mode:"await_approval" as const,
+      reasons:[...new Set([...(autonomy.reasons||[]),"O modo operacional é Assistente; qualquer envio exige aprovação humana."])]
+    };
+  }
   let queueItem:any=null;
   let queueCreated=false;
   let autoSend:any=null;
@@ -116,7 +129,7 @@ export async function processConversation(input:ProcessConversationInput){
     });
   }
 
-  if(autonomy.mode==="auto_execute" && queueItem?.suggestedReply){
+  if(operationMode==="autonomous" && autonomy.mode==="auto_execute" && queueItem?.suggestedReply){
     try{
       autoSend=await executeManagedSend(queueItem.id,queueItem.suggestedReply,"autonomy");
       if(autoSend?.order)order=autoSend.order;
@@ -159,6 +172,7 @@ export async function processConversation(input:ProcessConversationInput){
   const deliveryPreview=analysis.orderAction==="create"?resolveDeliveryDate(receivedAt,analysis.deliveryDateExplicit):null;
   const result={
     ok:true,
+    operationMode,
     analysis,
     order,
     autonomy,
@@ -171,6 +185,7 @@ export async function processConversation(input:ProcessConversationInput){
     model:aiResult.model||null,
     escalated:!!aiResult.escalated,
     disagreement:!!aiResult.disagreement,
+    learningExamplesUsed:Number(aiResult.learningExamplesUsed||0),
     calls:aiResult.calls||[],
     sourceMessageId
   };
@@ -179,6 +194,7 @@ export async function processConversation(input:ProcessConversationInput){
     threadKey,
     fingerprint,
     sourceMessageId,
+    operationMode,
     messageType:analysis.messageType,
     confidence:analysis.confidence,
     orderId:order?.id||null,
@@ -189,6 +205,7 @@ export async function processConversation(input:ProcessConversationInput){
     model:aiResult.model||null,
     escalated:!!aiResult.escalated,
     disagreement:!!aiResult.disagreement,
+    learningExamplesUsed:Number(aiResult.learningExamplesUsed||0),
     usage:aiResult.calls||[]
   });
   await saveProcessedResult(fingerprint,{result});
