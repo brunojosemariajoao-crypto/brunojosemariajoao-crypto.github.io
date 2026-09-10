@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { verifyAppSession } from "./app-auth-core.mts";
 import { displayOrderNumber, itemKey, stableOrderId, type OrderLine, type OrderRecord } from "./order-engine.mts";
 import { appendActivity, getOrder, listOrders, saveOrder } from "./ai-store.mts";
+import { buildPreparationSummary } from "./preparation-core.mts";
 
 function json(body:any,status=200){return Response.json(body,{status,headers:{"Cache-Control":"no-store"}});}
 function validDate(value:string){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(new Date(`${value}T12:00:00Z`).getTime());}
@@ -32,13 +33,15 @@ export default async (req:Request, context:Context)=>{
     if(id){const order=await getOrder(id);return order?json({ok:true,order}):json({error:"Encomenda não encontrada"},404);}
     const q=String(url.searchParams.get("q")||"").trim().toLowerCase();
     const deliveryDate=String(url.searchParams.get("deliveryDate")||"").trim();
+    if(deliveryDate&&!validDate(deliveryDate))return json({error:"Data de entrega inválida"},400);
     let orders=await listOrders(500);
     if(deliveryDate)orders=orders.filter(o=>o.deliveryDate===deliveryDate);
     if(q)orders=orders.filter(o=>[
       o.number,o.customerName,o.customerEmail,o.storeName,o.deliveryDate,
       ...o.items.flatMap(i=>[i.product,i.normalizedProduct,i.rawLine])
     ].some(v=>String(v||"").toLowerCase().includes(q)));
-    return json({ok:true,orders});
+    const preparationSummary=deliveryDate?buildPreparationSummary(orders,deliveryDate):null;
+    return json({ok:true,orders,preparationSummary});
   }
 
   if(req.method!=="POST")return json({error:"Método não permitido"},405);
