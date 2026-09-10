@@ -63,7 +63,7 @@ export default async () => {
       .sort((a,b)=>validDateMs(b.latestInbound?.date)-validDateMs(a.latestInbound?.date));
 
     const worker=pruneWorkerIndex((await getJson<WorkerIndex>(WORKER_INDEX_KEY))||{},runStarted);
-    let aiRuns=0,processed=0,shadowEvaluated=0,baseline=0,errors=0,skipped=0,deferred=0;
+    let aiAttempts=0,processed=0,shadowEvaluated=0,baseline=0,errors=0,skipped=0,deferred=0;
     let lastError:string|null=null;
 
     for(const thread of threads){
@@ -82,7 +82,8 @@ export default async () => {
       }
 
       if(shouldSkip(previous,latestInboundId,runStarted)){skipped++;continue;}
-      if(aiRuns>=MAX_AI_THREADS_PER_RUN){deferred++;continue;}
+      if(aiAttempts>=MAX_AI_THREADS_PER_RUN){deferred++;continue;}
+      aiAttempts++;
 
       try{
         if(operationMode==="shadow"){
@@ -102,7 +103,6 @@ export default async () => {
           };
           processed++;
         }
-        aiRuns++;
       }catch(error:any){
         const message=safeError(error);lastError=message;
         worker[thread.key]={
@@ -128,7 +128,7 @@ export default async () => {
       recentMessages:Array.isArray(mailbox?.messages)?mailbox.messages.length:0,
       newMessages:mailbox?.newMessageIds?.length||0,
       threads:threads.length,
-      aiRuns,processed,shadowEvaluated,baselineThreads:baseline,
+      aiAttempts,processed,shadowEvaluated,baselineThreads:baseline,
       processingErrors:errors,unchangedSkipped:skipped,deferredThreads:deferred,
       lastError
     });
@@ -140,7 +140,7 @@ export default async () => {
       inboxNew:mailbox?.sync?.inboxNew||0,
       sentNew:mailbox?.sync?.sentNew||0,
       threads:threads.length,
-      aiRuns,
+      aiAttempts,
       aiProcessed:processed,
       shadowEvaluated,
       baselineThreads:baseline,
