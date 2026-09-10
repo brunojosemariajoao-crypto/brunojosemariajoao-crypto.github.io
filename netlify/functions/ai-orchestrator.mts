@@ -130,7 +130,7 @@ export async function processConversation(input:ProcessConversationInput){
       await sendPushToOperators({
         title:queueItem.kind==="review"?"VitalVeg · Precisa de ti":"VitalVeg · Resposta pronta",
         body:`${queueItem.title}: ${queueItem.summary}`.slice(0,180),
-        url:`/v9/?open=${encodeURIComponent(queueItem.id)}`,
+        url:`?open=${encodeURIComponent(queueItem.id)}`,
         tag:queueItem.id
       });
     }catch(error:any){
@@ -151,6 +151,9 @@ export async function processConversation(input:ProcessConversationInput){
     deliveryPreview,
     fingerprint,
     model:aiResult.model||null,
+    escalated:!!aiResult.escalated,
+    disagreement:!!aiResult.disagreement,
+    calls:aiResult.calls||[],
     sourceMessageId
   };
 
@@ -164,7 +167,11 @@ export async function processConversation(input:ProcessConversationInput){
     orderNumber:order?.number||null,
     autonomyMode:autonomy.mode,
     queueItemId:queueItem?.id||null,
-    autoSent:!!autoSend
+    autoSent:!!autoSend,
+    model:aiResult.model||null,
+    escalated:!!aiResult.escalated,
+    disagreement:!!aiResult.disagreement,
+    usage:aiResult.calls||[]
   });
   await saveProcessedResult(fingerprint,{result});
   return result;
