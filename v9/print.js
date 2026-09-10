@@ -1,4 +1,4 @@
-const esc=(v='')=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=(v='')=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const root=document.querySelector('#printRoot');
 const params=new URLSearchParams(location.search);const deliveryDate=params.get('date')||'';
 const ptDate=new Intl.DateTimeFormat('pt-PT',{weekday:'long',day:'2-digit',month:'long',year:'numeric',timeZone:'UTC'});
