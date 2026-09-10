@@ -1,0 +1,35 @@
+name: Central VitalVeg V9 Refresh Lockfile
+
+on:
+  push:
+    branches: ["ai-employee-v9"]
+    paths: ["V9_LOCK_REFRESH.txt"]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ai-employee-v9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Refresh exact dependency lock
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Prove clean install works
+        run: npm ci --ignore-scripts
+      - name: Commit lockfile if it changed
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already current"
+            exit 0
+          fi
+          git config user.name "VitalVeg CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "V9: atualizar lockfile de dependências"
+          git push origin HEAD:ai-employee-v9
