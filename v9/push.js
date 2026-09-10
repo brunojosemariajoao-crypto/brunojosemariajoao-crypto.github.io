@@ -10,7 +10,8 @@
   }
   async function ensureRegistration(){
     if(!('serviceWorker' in navigator))throw new Error('Este navegador não suporta notificações em segundo plano.');
-    registration=registration||await navigator.serviceWorker.register('/v9/sw.js',{scope:'/v9/'});
+    // Caminhos relativos permitem testar em /v9/ e publicar a mesma build na raiz do site.
+    registration=registration||await navigator.serviceWorker.register('./sw.js',{scope:'./'});
     return navigator.serviceWorker.ready;
   }
   async function enable(){
