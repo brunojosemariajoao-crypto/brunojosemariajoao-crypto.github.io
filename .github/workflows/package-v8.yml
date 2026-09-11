@@ -18,18 +18,35 @@ jobs:
           node --check app.js
           node --check auth.js
           node --check v8.js
+          node --check v8-hotfix.js
+          node --check v8-delivery-fix.js
+          node --check v8-order-intelligence.js
+          node --check v8-ops.js
+          node --check v8-session.js
+          node --check v8-generic-order-lines.js
+          node --check v8-print-fix.js
       - name: Package source
         uses: actions/upload-artifact@v4
         with:
           name: vitalveg-central-v8-source
           path: |
             index.html
+            print.html
             styles.css
             auth.css
             auth.js
             app.js
             v8.css
             v8.js
+            v8-hotfix.css
+            v8-hotfix.js
+            v8-delivery-fix.js
+            v8-order-intelligence.js
+            v8-ops.css
+            v8-ops.js
+            v8-session.js
+            v8-generic-order-lines.js
+            v8-print-fix.js
             manifest.json
             icon.svg
             sw.js
