@@ -1,0 +1,39 @@
+name: Package VitalVeg V9 ZIP
+
+on:
+  push:
+    branches: [ai-employee-v9]
+    paths:
+      - .github/workflows/package-v9-download.yml
+      - V9_PACKAGE_TRIGGER.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ai-employee-v9
+
+      - name: Create clean V9 ZIP
+        run: |
+          set -euo pipefail
+          rm -f VitalVeg-V9.zip
+          zip -r VitalVeg-V9.zip . \
+            -x '.git/*' \
+            -x '.deploy/*' \
+            -x 'VitalVeg-V9.zip' \
+            -x 'DEPLOY_TRIGGER_V9.txt' \
+            -x 'V9_PACKAGE_TRIGGER.txt'
+
+      - name: Upload V9 ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: VitalVeg-V9
+          path: VitalVeg-V9.zip
+          if-no-files-found: error
+          retention-days: 7
