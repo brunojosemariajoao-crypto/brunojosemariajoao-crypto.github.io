@@ -1,4 +1,4 @@
-/* Central VitalVeg V8.5.2 — pedido final resulta da conversa cliente + VitalVeg */
+/* Central VitalVeg V8.5.3 — pedido final resulta do acordo completo cliente + VitalVeg */
 (() => {
   const ORDER_UNIT_RE = /\b(\d+(?:[.,]\d+)?)\s*(?:x\s*)?(cx|cxs|caixa|caixas|kg|kgs|quilo|quilos|covete|covetes|un|unid|unidade|unidades|molho|molhos|tabuleiro|tabuleiros|saco|sacos)\b/i;
   const ORDER_UNIT_RE_GLOBAL = /\b(\d+(?:[.,]\d+)?)\s*(?:x\s*)?(cx|cxs|caixa|caixas|kg|kgs|quilo|quilos|covete|covetes|un|unid|unidade|unidades|molho|molhos|tabuleiro|tabuleiros|saco|sacos)\b/ig;
@@ -9,8 +9,10 @@
   const REQUESTISH_RE = /\b(?:encomenda|preciso|queria|quero|consegue[m]?|arranjar|fornecer|mandar|enviar|mais|tamb[eé]m|acrescent|adicion)\b/i;
   const ACCEPT_RE = /\b(?:consigo|conseguimos|arranjo|arranjamos|vou\s+arranjar|vamos\s+arranjar|vou\s+conseguir|vamos\s+conseguir|incluo|inclu[ií]mos|podemos\s+(?:arranjar|fornecer|incluir)|fica\s+inclu[ií]do|confirmo\s+que\s+(?:sim|consigo))\b/i;
   const ACCEPT_CONTEXT_RE = /\b(?:para\s+(?:a|o)\s+cliente|fica\s+para\s+(?:a|o)\s+cliente)\b/i;
-  const REJECT_RE = /\b(?:n[aã]o\s+(?:consigo|conseguimos|temos|h[aá]|vou\s+conseguir|vamos\s+conseguir|[eé]\s+poss[ií]vel)|sem\s+stock|indispon[ií]vel|n[aã]o\s+dispon[ií]vel)\b/i;
+  const REJECT_RE = /\b(?:n[aã]o\s+(?:consigo|conseguimos|temos|h[aá]|vou\s+conseguir|vamos\s+conseguir|[eé]\s+poss[ií]vel|est[aá]\s+dispon[ií]vel|estar[aá]\s+dispon[ií]vel)|sem\s+stock|indispon[ií]vel|n[aã]o\s+dispon[ií]vel)\b/i;
   const DEFER_RE = /\b(?:pr[oó]xima\s+entrega|pr[oó]ximo\s+dia|fica\s+para\s+(?:ter[cç]a|quinta|s[aá]bado)|n[aã]o\s+nesta\s+entrega)\b/i;
+  const ADDITIVE_CONTEXT_RE = /\b(?:mais|acrescent(?:ar|e|em)?|adicion(?:ar|e|em)?|tamb[eé]m)\s*$/i;
+  const ITEM_STOPWORDS = new Set(['de','do','da','dos','das','um','uma','uns','umas','o','a','os','as','e','para','cliente','cx','cxs','caixa','caixas','kg','kgs','quilo','quilos','covete','covetes','un','unid','unidade','unidades','molho','molhos','tabuleiro','tabuleiros','saco','sacos']);
 
   function cleanLine(line=''){
     return String(line).replace(/^[-•*\s]+/,'').replace(/\s+/g,' ').trim();
@@ -18,6 +20,15 @@
 
   function normalKey(text=''){
     return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
+  function singularToken(token=''){
+    const t=normalKey(token);
+    return t.length>4 && t.endsWith('s') ? t.slice(0,-1) : t;
+  }
+
+  function itemTokens(text=''){
+    return normalKey(text).split(/\s+/).map(singularToken).filter(t=>t.length>=3&&!ITEM_STOPWORDS.has(t));
   }
 
   function unitFamily(unit=''){
@@ -47,8 +58,6 @@
     const raw=cleanLine(line);
     if(!raw || raw.length<3) return null;
 
-    // Uma linha de encomenda tem de começar como pedido. Não basta existir "2 molhos"
-    // perdido dentro de uma frase de conversa.
     const withUnit=unitMatchAtStart(raw);
     if(withUnit){
       const after=raw.slice((withUnit.index||0)+withUnit[0].length).replace(/^\s*[-:–—]?\s*/,'').trim();
@@ -65,8 +74,6 @@
       };
     }
 
-    // Também aceita pedidos como "4 alfaces" ou "mais 2 agriões", sem unidade explícita.
-    // Mantém-se ancorado ao início para não apanhar números de uma frase normal.
     const simple=raw.match(/^(?:por\s+favor[,;:]?\s*)?(?:(?:mais|afinal|quero|queria|acrescent(?:ar|e|em)?|adicion(?:ar|e|em)?|retir(?:ar|e|em)?|menos)\s+)?(\d+(?:[.,]\d+)?)\s+([\p{L}][\p{L}\d ./%ºª_-]{1,})$/iu);
     if(!simple) return null;
     const description=simple[2].trim();
@@ -122,7 +129,12 @@
     if(!REQUESTISH_RE.test(text) && !QUESTIONISH_RE.test(text)) return [];
     const explicit=orderLinesFromMessage(m);
     const explicitSignatures=new Set(explicit.map(x=>`${x.qty}|${unitFamily(x.unit)}|${x.key}`));
-    return quantityMentions(m).filter(x=>!explicitSignatures.has(`${x.qty}|${unitFamily(x.unit)}|${x.key}`));
+    return quantityMentions(m)
+      .filter(x=>!explicitSignatures.has(`${x.qty}|${unitFamily(x.unit)}|${x.key}`))
+      .map(x=>{
+        const before=text.slice(Math.max(0,x.index-45),x.index).trim();
+        return {...x,operation:ADDITIVE_CONTEXT_RE.test(before)?'add':'set'};
+      });
   }
 
   function isAcceptedOutbound(m,mentions){
@@ -144,54 +156,85 @@
     return a===b || ((a==='un'||b==='un') && (a==='molho'||b==='molho'));
   }
 
-  function resolvePendingKey(candidate,current,outboundMention){
-    if(candidate.key) return candidate.key;
-    if(outboundMention?.key) return outboundMention.key;
+  function itemReferencedByText(item,text=''){
+    const hay=new Set(itemTokens(text));
+    const needles=itemTokens(`${item?.description||''} ${item?.raw||''}`);
+    return needles.some(t=>hay.has(t));
+  }
+
+  function removeUnavailableItems(current,known,m){
+    if(!isRejectedOutbound(m)) return [];
+    const text=messageText(m);
+    const removed=[];
+    for(const [key,item] of current.entries()){
+      if(itemReferencedByText(item,text)){
+        known.set(key,{...item});
+        current.delete(key);
+        removed.push(key);
+      }
+    }
+    return removed;
+  }
+
+  function resolvePendingKey(candidate,current,known,outboundMention){
+    const pools=new Map([...known.entries(),...current.entries()]);
+    if(candidate.key && pools.has(candidate.key)) return candidate.key;
+    if(outboundMention?.key && pools.has(outboundMention.key)) return outboundMention.key;
 
     const family=unitFamily(candidate.unit);
-    const entries=[...current.entries()];
+    const entries=[...pools.entries()];
     const byUnit=entries.filter(([,item])=>unitFamily(item.unit)===family);
     if(byUnit.length===1) return byUnit[0][0];
 
-    // Ex.: pedido inicial "5 unid de molhos de nabiça" e depois "consegue 2 molhos?".
-    // Se só existe um artigo cujo nome menciona a unidade pedida, o contexto identifica-o.
     const token=family==='molho'?'molho':family==='covete'?'covete':family==='saco'?'saco':family==='tabuleiro'?'tabuleiro':'';
     if(token){
       const byDescription=entries.filter(([,item])=>normalKey(item.description||item.raw).includes(token));
       if(byDescription.length===1) return byDescription[0][0];
     }
+
+    if(candidate.key) return candidate.key;
+    if(outboundMention?.key) return outboundMention.key;
     return '';
   }
 
-  function addAcceptedCandidate(current,candidate,mention,unresolved){
-    const key=resolvePendingKey(candidate,current,mention);
+  function setAcceptedCandidate(current,known,candidate,mention,unresolved){
+    const key=resolvePendingKey(candidate,current,known,mention);
     if(!key){
       unresolved.push(`${candidate.qty} ${candidate.unit} confirmados na conversa, artigo por identificar`);
       return;
     }
 
-    const old=current.get(key);
+    const active=current.get(key);
+    const remembered=known.get(key);
+    const old=active||remembered;
+    const additive=candidate.operation==='add' && !!active;
+    const finalQty=additive ? Number(active.qty)+Number(candidate.qty) : Number(candidate.qty);
+
     if(old){
-      const newQty=Number(old.qty)+Number(candidate.qty);
-      const replacement=String(old.raw||'').replace(/^\s*\d+(?:[.,]\d+)?/,String(newQty).replace('.',','));
-      current.set(key,{...old,qty:newQty,raw:replacement||`${newQty} ${old.unit} ${old.description||key}`});
+      const replacement=String(old.raw||'').replace(/^\s*\d+(?:[.,]\d+)?/,String(finalQty).replace('.',','));
+      const next={...old,qty:finalQty,raw:replacement||`${String(finalQty).replace('.',',')} ${old.unit} ${old.description||key}`};
+      current.set(key,next);
+      known.set(key,{...next});
       return;
     }
 
     const description=candidate.description||mention?.description||key;
-    current.set(key,{
-      raw:`${String(candidate.qty).replace('.',',')} ${candidate.unit} ${description}`.trim(),
-      qty:candidate.qty,
+    const next={
+      raw:`${String(finalQty).replace('.',',')} ${candidate.unit} ${description}`.trim(),
+      qty:finalQty,
       unit:candidate.unit,
       description,
       key
-    });
+    };
+    current.set(key,next);
+    known.set(key,{...next});
   }
 
   function genericFinalOrderSummary(thread){
     if(!thread?.messages?.length) return '';
     const messages=[...thread.messages].sort((a,b)=>new Date(a.date)-new Date(b.date));
     const current=new Map();
+    const known=new Map();
     const pending=[];
     const unresolved=[];
     let started=false;
@@ -205,58 +248,63 @@
 
           if(!alteration){
             if(parsed.length>=2 || !started) current.clear();
-            parsed.forEach(item=>current.set(item.key,item));
+            parsed.forEach(item=>{ current.set(item.key,item); known.set(item.key,{...item}); });
             started=true;
           }else{
             for(const item of parsed){
               const lineLow=item.raw.toLowerCase();
               const old=current.get(item.key);
               if(/\b(retirar|retira|anular|anula|cancelar|cancela|sem)\b/.test(lineLow) && item.qty===0){
+                if(old) known.set(item.key,{...old});
                 current.delete(item.key);
               }else if(/\bmais\b|acrescent|adicion/.test(lineLow) && old){
                 const newQty=old.qty+item.qty;
                 const replacement=old.raw.replace(/^\s*\d+(?:[.,]\d+)?/,String(newQty).replace('.',','));
-                current.set(item.key,{...old,qty:newQty,raw:replacement});
-              }else current.set(item.key,item);
+                const next={...old,qty:newQty,raw:replacement};
+                current.set(item.key,next); known.set(item.key,{...next});
+              }else{
+                current.set(item.key,item); known.set(item.key,{...item});
+              }
             }
           }
         }
 
-        // Uma frase de conversa como "tenho encomenda de 2 molhos, será que consegue?"
-        // fica pendente. Só altera a encomenda se uma resposta posterior da VitalVeg a aceitar.
         for(const request of conversationalRequests(m)){
           pending.push({...request,messageId:m.id||'',date:m.date});
         }
         continue;
       }
 
-      if(m.direction!=='out' || !pending.length) continue;
+      if(m.direction!=='out') continue;
       const mentions=quantityMentions(m);
 
       if(isRejectedOutbound(m)){
-        if(mentions.length){
-          for(const mention of mentions){
-            const i=[...pending].map((p,idx)=>({p,idx})).reverse().find(x=>pendingMatch(x.p,mention))?.idx;
-            if(i!==undefined) pending.splice(i,1);
+        removeUnavailableItems(current,known,m);
+        if(pending.length){
+          if(mentions.length){
+            for(const mention of mentions){
+              const i=[...pending].map((p,idx)=>({p,idx})).reverse().find(x=>pendingMatch(x.p,mention))?.idx;
+              if(i!==undefined) pending.splice(i,1);
+            }
+          }else if(pending.length===1){
+            pending.pop();
           }
-        }else if(pending.length===1){
-          pending.pop();
         }
         continue;
       }
 
-      if(!isAcceptedOutbound(m,mentions)) continue;
+      if(!pending.length || !isAcceptedOutbound(m,mentions)) continue;
 
       if(mentions.length){
         for(const mention of mentions){
           const found=[...pending].map((p,idx)=>({p,idx})).reverse().find(x=>pendingMatch(x.p,mention));
           if(!found) continue;
-          addAcceptedCandidate(current,found.p,mention,unresolved);
+          setAcceptedCandidate(current,known,found.p,mention,unresolved);
           pending.splice(found.idx,1);
         }
       }else if(pending.length===1 && ACCEPT_RE.test(messageText(m))){
         const candidate=pending.pop();
-        addAcceptedCandidate(current,candidate,null,unresolved);
+        setAcceptedCandidate(current,known,candidate,null,unresolved);
       }
     }
 
@@ -283,13 +331,10 @@
         return 'ENCOMENDA';
       }
 
-      // Uma pergunta sobre quantidade dentro de um RE: não é automaticamente uma nova encomenda.
-      // Fica como informação/conversa até a resposta da VitalVeg definir o resultado.
       if(conversationalRequests(m).length){
         return 'PEDIDO DE INFORMAÇÃO';
       }
 
-      // Um RE: de uma encomenda não passa a ser outra encomenda só por manter o assunto.
       if(base==='ENCOMENDA' && /^re:/i.test(m.subject||'')){
         return QUESTIONISH_RE.test(m.current||m.text||'') ? 'PEDIDO DE INFORMAÇÃO' : 'CONVERSA / REVER';
       }
