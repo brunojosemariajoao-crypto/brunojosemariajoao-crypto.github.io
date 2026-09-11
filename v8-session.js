@@ -60,7 +60,7 @@
     if(typeof state==='undefined'||typeof fetchRealMail!=='function'||typeof openConnectGate!=='function'||typeof sendReply!=='function'){setTimeout(install,80);return;}
     installed=true;
 
-    await loadOnce('v8-generic-order-lines.js?v=8.9','data-v8-generic-order-lines-js');
+    await loadOnce('v8-generic-order-lines.js?v=8.9.1','data-v8-generic-order-lines-js');
     await loadOnce('v8-print-fix.js?v=8.9','data-v8-print-fix-js');
 
     const baseOpenConnectGate=openConnectGate;
