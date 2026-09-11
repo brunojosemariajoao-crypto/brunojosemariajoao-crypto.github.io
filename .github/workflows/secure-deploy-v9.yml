@@ -59,7 +59,15 @@ jobs:
           if [ -f v9/manifest.json ]; then cp v9/manifest.json "$DEST/"; fi
           cp assets/vitalveg-logo-original.png "$DEST/assets/"
           cp netlify/functions/*.mts "$DEST/netlify/functions/"
-          cp netlify.toml package.json package-lock.json "$DEST/"
+          cp package.json package-lock.json "$DEST/"
+          cat > "$DEST/netlify.toml" <<'EOF'
+          [build]
+            publish = "."
+            functions = "netlify/functions"
+
+          [functions]
+            node_bundler = "esbuild"
+          EOF
           echo "$DEST" > /tmp/deploy-dir.txt
 
       - name: Generate one-time deployment key
