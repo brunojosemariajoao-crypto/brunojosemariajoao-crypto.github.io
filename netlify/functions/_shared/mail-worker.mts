@@ -1,3 +1,4 @@
+import {isInAnalysisWindow} from "./analysis-window.mts";
 import type { Config } from "@netlify/functions";
 import { mailboxConfigured } from "../mail-core.mts";
 import { syncV9Mailbox } from "../mail-v9-core.mts";
@@ -73,7 +74,7 @@ export default async () => {
       const latestAt=validDateMs(latest.date);
       const previous=worker[thread.key];
 
-      if(latestAt<runStarted-14*24*60*60*1000){
+      if(!isInAnalysisWindow(thread.messages)){
         worker[thread.key]={
           latestInboundId,latestInboundDate:String(latest.date||""),lastFingerprint:null,
           lastResult:"baseline",lastError:null,updatedAt:new Date().toISOString(),nextRetryAt:null

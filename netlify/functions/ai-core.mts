@@ -1,3 +1,4 @@
+import {isInAnalysisWindow} from "./_shared/analysis-window.mts";
 import { createHash } from "node:crypto";
 import { cleanCurrentMailText } from "./mail-text.mts";
 import { assertAiBudgetAvailable, recordAiCall } from "./ai-budget.mts";
@@ -275,6 +276,7 @@ function addressOnly(value:any){
 }
 
 export async function analyzeConversation(input:AnalysisRequest){
+  if(!isInAnalysisWindow(input.messages))throw new Error("Histórico anterior a 13/09/2026 encerrado pelo operador; não será analisado.");
   const apiKey=Netlify.env.get("OPENAI_API_KEY");
   if(!apiKey)throw new Error("OPENAI_API_KEY não configurada");
 

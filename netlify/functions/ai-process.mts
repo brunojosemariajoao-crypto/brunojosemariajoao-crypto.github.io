@@ -1,3 +1,4 @@
+import {isInAnalysisWindow} from "./_shared/analysis-window.mts";
 import type { Config, Context } from "@netlify/functions";
 import { verifyAppSession } from "./app-auth-core.mts";
 import { processConversation } from "./ai-orchestrator.mts";
@@ -13,6 +14,7 @@ export default async (req:Request, context:Context)=>{
   const messages=Array.isArray(body?.messages)?body.messages:[];
   const threadKey=String(body?.threadKey||"").trim();
   if(!threadKey||!messages.length)return json({error:"Faltam threadKey ou mensagens"},400);
+  if(!isInAnalysisWindow(messages))return json({ok:true,ignored:true,reason:"Histórico anterior a 13/09/2026 encerrado pelo operador."});
   try{
     const mode=await getAiOperationMode();
     const common={threadKey,messages,knownCustomer:body.knownCustomer||null,force:body.force===true};

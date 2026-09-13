@@ -1,3 +1,4 @@
+import {isInAnalysisWindow} from "./_shared/analysis-window.mts";
 import { noticeContext,replyBlockReason,operationalReceipt } from "./_shared/operational-guards.mts";
 import { createHash } from "node:crypto";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
@@ -53,6 +54,7 @@ export async function processConversation(input:ProcessConversationInput){
   const threadKey=String(input?.threadKey||"").trim();
   const messages=Array.isArray(input?.messages)?input.messages:[];
   if(!threadKey||!messages.length)throw new Error("Faltam threadKey ou mensagens");
+  if(!isInAnalysisWindow(messages))return {ok:true,ignored:true,order:null,reason:"Histórico anterior a 13/09/2026 encerrado pelo operador."};
 
   // Fail-safe: o orquestrador operacional nunca pode executar durante o modo Sombra.
   // O modo Sombra tem um caminho próprio que não grava encomendas nem cria envios.
