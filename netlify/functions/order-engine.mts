@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 export type AiOrderItem = {
+  fulfillment?:"accepted"|"unavailable"|"pending";
   quantity:number|string|null;
   unit:string|null;
   product:string;
@@ -41,6 +42,7 @@ export type OrderEvent = {
 };
 
 export type OrderLine = {
+  fulfillment?:"accepted"|"unavailable"|"pending";
   key:string;
   quantity:number|string|null;
   unit:string|null;
@@ -54,6 +56,7 @@ export type OrderLine = {
 };
 
 export type OrderRecord = {
+  appliedEventIds?:string[];
   id:string;
   number:string;
   customerName:string|null;
@@ -119,7 +122,8 @@ export function resolveDeliveryDate(receivedAt:string, explicitDate:string|null,
   const explicit=parseDateKey(explicitDate);
   if(explicit){
     const explicitKey=dateKey(explicit.y,explicit.m,explicit.d);
-    const regularDeliveryDay=deliveryDays.includes(weekdayForKey(explicitKey));
+    const rp=lisbonParts(receivedAt);
+    const regularDeliveryDay=deliveryDays.includes(weekdayForKey(explicitKey)) && explicitKey>dateKey(rp.y,rp.m,rp.d);
     return {
       date:explicitKey,source:"explicit" as const,needsReview:!regularDeliveryDay,
       reason:regularDeliveryDay?"":`O cliente indicou explicitamente ${explicitKey}, uma data fora dos dias habituais de entrega. Confirmar entrega extraordinária antes de aceitar.`
@@ -156,9 +160,10 @@ export function itemKey(item:Pick<AiOrderItem,"product"|"normalizedProduct"|"uni
 
 function toLine(item:AiOrderItem, sourceMessageId:string):OrderLine{
   return {
+    fulfillment:item.fulfillment||( /indispon[ií]vel|n[aã]o dispon[ií]vel/i.test(item.notes||"")?"unavailable":"accepted"),
     key:itemKey(item),quantity:item.quantity,unit:item.unit,product:item.product,
     normalizedProduct:item.normalizedProduct,notes:item.notes,rawLine:item.rawLine,
-    confidence:Number(item.confidence||0),uncertain:Number(item.confidence||0)<0.90 || item.operation==="unknown",
+    confidence:Number(item.confidence||0),uncertain:Number(item.confidence||0)<0.90 || item.operation==="unknown" || item.fulfillment==="pending",
     lastSourceMessageId:sourceMessageId
   };
 }
@@ -183,7 +188,7 @@ function applyDelta(map:Map<string,OrderLine>, item:AiOrderItem, sourceMessageId
     map.set(key,toLine(item,sourceMessageId)); return;
   }
   const delta=numeric(item.quantity);
-  const base=numeric(current?.quantity??null);
+  const base=!current&&op==="add"?0:numeric(current?.quantity??null);
   if(delta===null || base===null){
     const uncertain=toLine(item,sourceMessageId); uncertain.uncertain=true;
     map.set(key||`incerto:${sourceMessageId}:${map.size}`,uncertain);
@@ -219,7 +224,10 @@ export function consolidateOrder(events:OrderEvent[], existing?:OrderRecord|null
   let createdAt=existing?.createdAt||ordered[0]?.receivedAt||now.toISOString();
   let id=existing?.id||"";
 
+  const applied=new Set(existing?.appliedEventIds||[]);
   for(const event of ordered){
+    if(applied.has(event.sourceMessageId))continue;
+    applied.add(event.sourceMessageId);
     const a=event.analysis;
     if(a.customerName)customerName=a.customerName;
     if(a.customerEmail)customerEmail=a.customerEmail.toLowerCase();
@@ -250,7 +258,7 @@ export function consolidateOrder(events:OrderEvent[], existing?:OrderRecord|null
         for(const item of a.items||[])applyDelta(map,{...item,operation:"unknown"},event.sourceMessageId,reasons);
         reasons.push("A IA não conseguiu determinar se a alteração era completa ou incremental.");
       }
-      status="review";
+      status=a.needsHumanReview||reasons.length||!existing?"review":"awaiting_approval";
     }else if(a.orderAction==="cancel"){
       status="cancelled";
     }else if(a.orderAction==="confirm" && status!=="cancelled"){
@@ -276,6 +284,6 @@ export function consolidateOrder(events:OrderEvent[], existing?:OrderRecord|null
   return {
     id,number:existing?.number||displayOrderNumber(id,deliveryDate),customerName,customerEmail,storeName,
     deliveryDate,deliverySource,status,items,reviewReasons:uniqueReasons,sourceMessageIds:[...sources],
-    createdAt,updatedAt:now.toISOString()
+    appliedEventIds:[...applied],createdAt,updatedAt:now.toISOString()
   };
 }

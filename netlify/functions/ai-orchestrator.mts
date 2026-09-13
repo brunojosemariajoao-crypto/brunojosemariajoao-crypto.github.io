@@ -1,3 +1,4 @@
+import { noticeContext,replyBlockReason,operationalReceipt } from "./_shared/operational-guards.mts";
 import { createHash } from "node:crypto";
 import { analyzeConversation, requestFingerprint } from "./ai-core.mts";
 import { ensureSuggestedReply } from "./ai-reply-policy.mts";
@@ -7,7 +8,7 @@ import { decideAutonomy } from "./autonomy-core.mts";
 import { executeManagedSend } from "./managed-send-core.mts";
 import { sendPushToOperators } from "./push-core.mts";
 import {
-  appendActivity, findOpenOrderForCustomer, getAnalysis, getAutonomyPolicy,
+  appendActivity, findOpenOrderForCustomer, getAnalysis, getAutonomyPolicy, getJson,listOrders,supersedeThreadQueue,
   getOrder, getProcessedResult, getQueueItem, getThreadOrderId, saveAnalysis, saveOrder,
   saveProcessedResult, saveThreadOrderId, upsertQueueItem
 } from "./ai-store.mts";
@@ -58,39 +59,61 @@ export async function processConversation(input:ProcessConversationInput){
   const operationMode=await getAiOperationMode();
   if(operationMode==="shadow")throw new Error("O modo Sombra não permite processamento operacional");
 
-  const analysisInput={messages,knownCustomer:input.knownCustomer||null,deliveryDays:[2,4,6],cutoff:"14:00"};
+  const latest=latestInbound(messages);
+  if(!latest)throw new Error("Sem mensagem recebida");
+  const modeConfig:any=await getJson('config/ai-operation-mode.json');
+  const replyBlock=replyBlockReason(messages,modeConfig?.updatedAt||null);
+  const linked=await getThreadOrderId(threadKey);
+  let existing:OrderRecord|null=linked?await getOrder(linked):null;
+  const sender=cleanAddress(latest.from);
+  if(!existing){
+    const day=resolveDeliveryDate(latest.date,null).date;
+    const candidates=(await listOrders(1000)).filter(o=>o.customerEmail===sender&&o.deliveryDate===day&&o.status!=='cancelled');
+    if(candidates.length===1)existing=candidates[0];
+  }
+  const snapshot:any=await getJson('mail/v9-snapshot.json');
+  const availabilityContext=noticeContext(snapshot?.messages||[],messages);
+  const analysisInput={messages,knownCustomer:input.knownCustomer||null,deliveryDays:[2,4,6],cutoff:"14:00",availabilityContext,existingOrder:existing};
   const fingerprint=requestFingerprint(analysisInput);
   if(!input.force){
     const done:any=await getProcessedResult(fingerprint);
     if(done?.result)return {...done.result,alreadyProcessed:true};
   }
 
-  const cached:any=await getAnalysis(fingerprint);
+  const cached:any=await getAnalysis(fingerprint) || (replyBlock?await getAnalysis(requestFingerprint({messages})):null);
   const aiResult:any=cached?.analysis?cached:await analyzeConversation(analysisInput);
   if(!cached)await saveAnalysis(fingerprint,aiResult);
 
   const analysis:AiAnalysis=ensureSuggestedReply(aiResult.analysis) as AiAnalysis;
-  const latest=latestInbound(messages);
-  if(!latest)throw new Error("A conversa não contém mensagem recebida para processar");
+
   const receivedAt=String(latest?.date||new Date().toISOString());
   const sourceMessageId=String(latest?.messageId||latest?.id||analysis.sourceMessageIds?.at(-1)||threadKey);
-  if(!analysis.customerEmail)analysis.customerEmail=cleanAddress(String(latest?.from||""))||null;
+  analysis.customerEmail=sender||null;
 
   let order:OrderRecord|null=null;
   if(analysis.orderAction!=="none"){
-    let existing:OrderRecord|null=null;
-    const linkedOrderId=await getThreadOrderId(threadKey);
-    if(linkedOrderId)existing=await getOrder(linkedOrderId);
-    if(!existing && analysis.orderAction!=="create")existing=await findOpenOrderForCustomer(analysis.customerEmail);
+    if(existing&&analysis.orderAction==='create'&&!existing.appliedEventIds?.includes(sourceMessageId)){
+      analysis.orderAction='amend';
+      analysis.needsHumanReview=true;
+      analysis.reviewReasons.push('Já existe uma encomenda deste cliente para a data; confirmar a substituição para não duplicar o pedido.');
+    }
+    if(!existing&&analysis.orderAction==='amend'){
+      analysis.needsHumanReview=true;
+      analysis.reviewReasons.push('Não foi localizada uma encomenda original inequívoca para esta alteração.');
+    }
 
     const event:OrderEvent={receivedAt,sourceMessageId,analysis};
     order=consolidateOrder([event],existing,new Date());
     if(order){
       await saveOrder(order);
+      await appendActivity("order_revision",{orderId:order.id,before:existing,after:order,sourceMessageId});
       await saveThreadOrderId(threadKey,order.id);
     }
   }
 
+  if(order&&!analysis.needsHumanReview&&analysis.orderAction!=='cancel')analysis.suggestedReply=operationalReceipt(order);
+  await saveAnalysis(fingerprint,{...aiResult,analysis});
+  await supersedeThreadQueue(threadKey,fingerprint);
   const policy=await getAutonomyPolicy();
   let autonomy=decideAutonomy(analysis,order,policy);
   if(operationMode!=="autonomous" && autonomy.mode==="auto_execute"){
@@ -100,6 +123,7 @@ export async function processConversation(input:ProcessConversationInput){
       reasons:[...new Set([...(autonomy.reasons||[]),"O modo operacional é Assistente; qualquer envio exige aprovação humana."])]
     };
   }
+  if(replyBlock&&autonomy.mode==='auto_execute')autonomy={mode:'ignore',canSend:false,reasons:[replyBlock]};
   let queueItem:any=null;
   let queueCreated=false;
   let autoSend:any=null;
@@ -114,6 +138,7 @@ export async function processConversation(input:ProcessConversationInput){
       id,
       threadKey,
       orderId:order?.id||null,
+      orderVersion:order?.updatedAt||null,
       kind:autonomy.mode==="review"?"review":"approval",
       title:analysis.storeName||analysis.customerName||analysis.customerEmail||"Mensagem recebida",
       summary:analysis.threadSummary||analysis.threadIntent||analysis.messageType,
@@ -129,7 +154,7 @@ export async function processConversation(input:ProcessConversationInput){
     });
   }
 
-  if(operationMode==="autonomous" && autonomy.mode==="auto_execute" && queueItem?.suggestedReply){
+  if(operationMode==="autonomous" && !replyBlock && autonomy.mode==="auto_execute" && queueItem?.suggestedReply){
     try{
       autoSend=await executeManagedSend(queueItem.id,queueItem.suggestedReply,"autonomy");
       if(autoSend?.order)order=autoSend.order;

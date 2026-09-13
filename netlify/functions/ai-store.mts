@@ -37,6 +37,7 @@ export type QueueItem={
   status:"open"|"approved"|"rejected"|"resolved";
   createdAt:string;
   updatedAt:string;
+  orderVersion?:string|null;
 };
 
 export type WorkerThreadState={
@@ -68,9 +69,9 @@ export async function saveOrder(order:OrderRecord){await setJson(`orders/${order
 export async function getOrder(id:string){return getJson<OrderRecord>(`orders/${id}.json`);}
 export async function listOrders(limit=250){
   const result:any=await store().list({prefix:"orders/"});
-  const keys=(result?.blobs||[]).map((x:any)=>x.key).slice(0,limit);
+  const keys=(result?.blobs||[]).map((x:any)=>x.key);
   const orders=(await Promise.all(keys.map((key:string)=>getJson<OrderRecord>(key)))).filter(Boolean) as OrderRecord[];
-  return orders.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  return orders.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0,limit);
 }
 export async function findOpenOrderForCustomer(email:string|null){
   const e=String(email||"").toLowerCase(); if(!e)return null;
@@ -128,3 +129,14 @@ export async function getAutonomyPolicy():Promise<AutonomyPolicy>{
   return (await getJson<AutonomyPolicy>("config/autonomy.json"))||DEFAULT_AUTONOMY_POLICY;
 }
 export async function saveAutonomyPolicy(policy:AutonomyPolicy){await setJson("config/autonomy.json",policy);}
+
+export async function claimOnce(key:string,value:any){return (await store().setJSON(key,value,{onlyIfNew:true})).modified;}
+export async function acquireLease(key:string,minutes=15){
+ const prior=await store().getWithMetadata(key,{type:'json'});
+ if(prior&&Date.parse((prior.data as any).expiresAt)>Date.now())return false;
+ const value={expiresAt:new Date(Date.now()+minutes*60000).toISOString()};
+ return (await store().setJSON(key,value,prior?{onlyIfMatch:prior.etag}:{onlyIfNew:true})).modified;
+}
+export async function supersedeThreadQueue(threadKey:string,fingerprint:string){
+ for(const q of await listQueue('open',1000))if(q.threadKey===threadKey&&q.analysisFingerprint!==fingerprint)await setQueueStatus(q.id,'resolved');
+}

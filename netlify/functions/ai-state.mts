@@ -1,3 +1,4 @@
+import { getAiBudgetStatus } from "./ai-budget.mts";
 import type { Config, Context } from "@netlify/functions";
 import { verifyAppSession } from "./app-auth-core.mts";
 import { listActivity, listOrders, listQueue, getAutonomyPolicy, getJson } from "./ai-store.mts";
@@ -30,6 +31,7 @@ export default async (req:Request, context:Context)=>{
       ok:true,
       generatedAt:new Date().toISOString(),
       operationMode,
+      budget:await getAiBudgetStatus(),
       workerHealth:workerHealth||{status:"unknown",code:"not_run_yet",lastRunAt:null,processingErrors:0,deferredThreads:0,lastError:null},
       shadowSummary:summarizeShadow(shadow),
       recentShadow:shadow.slice(0,12),

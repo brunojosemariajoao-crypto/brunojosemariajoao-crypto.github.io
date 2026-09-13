@@ -98,3 +98,22 @@ test("encomenda cuja entrega já passou fica histórica e não é reciclada",()=
   const o=consolidateOrder([event("2026-09-07T10:00:00Z",a)],null,new Date("2026-09-10T10:00:00Z"))!;
   assert.equal(o.deliveryDate,"2026-09-08"); assert.equal(o.status,"historical");
 });
+
+test('reprocessar o mesmo acréscimo não duplica a quantidade',()=>{
+ const now=new Date('2026-09-07T18:00:00Z');
+ const original=consolidateOrder([event('2026-09-07T10:00:00Z',{...baseAnalysis,items:[item(5,'molhos','Salsa')]},'pedido')],null,now);
+ const change=event('2026-09-07T11:00:00Z',{...baseAnalysis,orderAction:'amend',changeMode:'delta',items:[item(2,'molhos','Salsa','add')]},'acrescimo');
+ const first=consolidateOrder([change],original,now);
+ const repeated=consolidateOrder([change],first,now);
+ assert.equal(first?.items[0].quantity,7);assert.equal(repeated?.items[0].quantity,7);
+});
+test('artigo novo num acréscimo fica com a quantidade pedida',()=>{
+ const now=new Date('2026-09-07T18:00:00Z');
+ const original=consolidateOrder([event('2026-09-07T10:00:00Z',{...baseAnalysis,items:[item(1,'cx','Alface')]},'pedido')],null,now);
+ const result=consolidateOrder([event('2026-09-07T11:00:00Z',{...baseAnalysis,orderAction:'amend',changeMode:'delta',items:[item(2,'molhos','Salsa','add')]},'acrescimo')],original,now);
+ assert.equal(result?.items.find(i=>i.product==='Salsa')?.quantity,2);
+ assert.equal(result?.status,'awaiting_approval');
+});
+test('data explícita no próprio dia não contorna revisão do corte',()=>{
+ assert.equal(resolveDeliveryDate('2026-09-08T15:00:00Z','2026-09-08').needsReview,true);
+});

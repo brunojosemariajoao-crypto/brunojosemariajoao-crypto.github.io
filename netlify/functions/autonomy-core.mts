@@ -60,7 +60,7 @@ export function decideAutonomy(analysis:AiAnalysis,order:OrderRecord|null,policy
   if(Number(analysis.confidence||0)<policy.minAutoConfidence){
     return {mode:"await_approval",canSend:true,reasons:[`Confiança abaixo do mínimo autónomo (${policy.minAutoConfidence}).`]};
   }
-  if(order && ["review","cancelled"].includes(order.status)){
+  if(order && ["review","cancelled","historical","draft"].includes(order.status)){
     return {mode:"review",canSend:false,reasons:["O estado da encomenda bloqueia execução autónoma."]};
   }
   return {mode:"auto_execute",canSend:true,reasons:["A ação cumpre as regras configuradas para autonomia."]};

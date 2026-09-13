@@ -69,7 +69,7 @@ export function buildPreparationSummary(orders:OrderRecord[]|any[],deliveryDate:
       const row=map.get(key)!;
       row.customers.add(customerKey);
       const qty=numeric(item.quantity);
-      if(item.uncertain===true){
+      if(item.uncertain===true || item.fulfillment==="unavailable" || item.fulfillment==="pending"){
         row.uncertainLineCount++;
         row.uncertainLines.push(lineLabel(item));
         continue;

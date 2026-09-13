@@ -3,7 +3,7 @@ import { getAiOperationMode } from "./ai-mode.mts";
 import { sendVitalVegMail } from "./mail-send-core.mts";
 import { saveEditedReplyLearning } from "./ai-learning.mts";
 import {
-  appendActivity, getAnalysis, getAutonomyPolicy, getOrder, getQueueItem,
+  claimOnce,appendActivity, getAnalysis, getAutonomyPolicy, getOrder, getQueueItem,
   saveOrder, setQueueStatus
 } from "./ai-store.mts";
 
@@ -32,6 +32,9 @@ export async function executeManagedSend(queueId:string,text:string,actor:SendAc
     if(draft!==String(item.suggestedReply||"").trim())throw new Error("O modo autónomo não pode alterar silenciosamente a resposta aprovada pela IA");
   }
 
+  if(order&&item.orderVersion&&order.updatedAt!==item.orderVersion)throw new Error('A encomenda mudou depois desta sugestão. Revê a resposta atual antes de enviar.');
+  const claimKey=`send-claims/${encodeURIComponent(item.to)}/${encodeURIComponent(item.sourceMessageId||queueId)}.json`;
+  if(!(await claimOnce(claimKey,{queueId,at:new Date().toISOString(),actor})))throw new Error('Este pedido já tem um envio iniciado. Verifica Enviados antes de repetir.');
   const sent=await sendVitalVegMail({
     to:item.to,
     subject:item.subject,
