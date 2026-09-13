@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0c3b2e">
+  <title>Validação IA · Central VitalVeg</title>
+  <link rel="stylesheet" href="./v9.css">
+  <link rel="stylesheet" href="./shadow.css">
+</head>
+<body>
+  <main class="shadow-shell">
+    <header class="shadow-topbar">
+      <div>
+        <div class="eyebrow">FUNCIONÁRIO DIGITAL · CONTROLO DE QUALIDADE</div>
+        <h1>Validação da Inteligência Artificial</h1>
+        <p>A IA trabalha em segurança. Aqui medimos o que faria antes de lhe dar autonomia operacional.</p>
+      </div>
+      <a class="btn ghost shadow-back" href="./">← Voltar à Central</a>
+    </header>
+
+    <section id="modeBanner" class="shadow-mode-banner">
+      <div><span class="status-dot warn"></span><strong>Modo a carregar…</strong></div>
+      <p>Nenhuma resposta é enviada a partir deste ecrã.</p>
+    </section>
+
+    <section class="shadow-metrics" id="shadowMetrics"></section>
+
+    <section class="panel shadow-list-panel">
+      <div class="panel-head">
+        <div><h3>Decisões recentes da IA</h3><p>Compara a interpretação e classifica-a. Essa avaliação fica guardada.</p></div>
+        <button id="refreshShadow" class="btn ghost">Atualizar</button>
+      </div>
+      <div id="shadowList" class="panel-body"><div class="loading-state"><span class="loader"></span><p>A carregar avaliações…</p></div></div>
+    </section>
+  </main>
+
+  <div id="shadowDetailBackdrop" class="drawer-backdrop" hidden></div>
+  <aside id="shadowDetail" class="detail-drawer" aria-hidden="true">
+    <div class="drawer-head"><div><small>VALIDAÇÃO HUMANA</small><h2 id="shadowDetailTitle">Decisão da IA</h2></div><button id="closeShadowDetail" class="icon-btn">×</button></div>
+    <div id="shadowDetailBody" class="drawer-body"></div>
+  </aside>
+  <div id="shadowToast" class="toast" role="status"></div>
+  <script src="./shadow.js" defer></script>
+</body>
+</html>

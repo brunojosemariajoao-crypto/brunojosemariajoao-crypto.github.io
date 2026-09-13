@@ -1,6 +1,11 @@
 [build]
-  publish = "."
+  base = "."
+  command = "node --test tests/*.test.mts"
+  publish = "v9"
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
+
+[build.environment]
+  NODE_VERSION = "24"

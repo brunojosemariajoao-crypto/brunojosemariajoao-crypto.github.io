@@ -1,0 +1,14 @@
+.prep-summary-panel{margin:18px 0 20px;border:1px solid rgba(17,94,62,.18);box-shadow:0 12px 32px rgba(22,58,45,.07)}
+.prep-kicker{font-size:10px;font-weight:900;letter-spacing:.12em;color:#0d6a45;margin-bottom:5px}
+.prep-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.prep-overview>div{border:1px solid #e1ebe6;border-radius:12px;padding:12px;background:#f8fbf9;display:flex;gap:8px;align-items:baseline}
+.prep-overview strong{font-size:22px;color:#183a2e}.prep-overview span{font-size:11px;color:#6a7a72;font-weight:700}.prep-overview .attention{border-color:#efd69a;background:#fffaf0}
+.prep-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.prep-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;border:1px solid #dfe9e4;border-radius:14px;padding:14px;background:#fff}
+.prep-item.uncertain{border-color:#ebc96d;background:#fffdf6}
+.prep-product{min-width:0}.prep-product>strong{display:block;font-size:15px;color:#173d2f}.prep-product>small{display:block;margin-top:3px;font-size:11px;color:#74827c}
+.prep-qty{text-align:right;min-width:110px}.prep-qty>b{display:block;font-size:24px;line-height:1;color:#153e2f}.prep-qty>span{display:block;margin-top:4px;font-size:12px;font-weight:800;color:#53655d}.prep-qty>em{display:inline-block;margin-top:8px;font-size:10px;font-style:normal;font-weight:900;color:#9a6400}.prep-qty>em.ok{color:#168052}
+.prep-line-warning{margin-top:8px;padding:8px 9px;border-radius:9px;background:#fff5d9;font-size:10px;color:#72510c}.prep-line-warning strong,.prep-line-warning span{display:block}.prep-line-warning span{margin-top:3px;word-break:break-word}
+.prep-warning,.prep-all-good{margin-top:12px;border-radius:11px;padding:11px 12px;font-size:12px;line-height:1.45}.prep-warning{background:#fff5d9;color:#72510c;border:1px solid #f0d485}.prep-all-good{background:#eff9f4;color:#176142;border:1px solid #cfe9db}
+@media(max-width:900px){.prep-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.prep-overview{grid-template-columns:1fr 1fr}.prep-overview>div:last-child{grid-column:1/-1}.prep-item{grid-template-columns:1fr}.prep-qty{text-align:left}.prep-qty>b,.prep-qty>span{display:inline-block;margin-right:6px}}
