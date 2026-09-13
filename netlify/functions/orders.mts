@@ -40,7 +40,7 @@ export default async (req:Request, context:Context)=>{
       o.number,o.customerName,o.customerEmail,o.storeName,o.deliveryDate,
       ...o.items.flatMap(i=>[i.product,i.normalizedProduct,i.rawLine])
     ].some(v=>String(v||"").toLowerCase().includes(q)));
-    const preparationSummary=deliveryDate?buildPreparationSummary(orders,deliveryDate):null;
+    const preparationSummary=deliveryDate?buildPreparationSummary(orders,deliveryDate,true):null;
     return json({ok:true,orders,preparationSummary});
   }
 

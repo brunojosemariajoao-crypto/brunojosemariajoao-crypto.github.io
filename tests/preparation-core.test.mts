@@ -68,3 +68,11 @@ test("canceladas, históricas e outras datas não contaminam a preparação",()=
   assert.equal(s.orderCount,1);
   assert.equal(s.rows[0].confirmedQuantity,2);
 });
+
+test('impressão de data passada inclui históricas e exclui canceladas e outras datas',()=>{
+  const orders=[order('passada',[item(3,'cx','Alface')],'historical'),order('cancelada',[item(9,'cx','Alface')],'cancelled'),order('outra',[item(5,'cx','Alface')],'historical','2026-09-10')];
+  const printed=buildPreparationSummary(orders as any,'2026-09-12',true);
+  assert.equal(printed.orderCount,1);
+  assert.equal(printed.rows[0].confirmedQuantity,3);
+  assert.equal(buildPreparationSummary(orders as any,'2026-09-12').orderCount,0);
+});

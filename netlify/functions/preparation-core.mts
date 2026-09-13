@@ -39,9 +39,9 @@ function itemKey(item:any){
   return `${product}|${unit}`;
 }
 
-export function buildPreparationSummary(orders:OrderRecord[]|any[],deliveryDate:string|null):PreparationSummary{
+export function buildPreparationSummary(orders:OrderRecord[]|any[],deliveryDate:string|null,includeHistorical=false):PreparationSummary{
   const safe=(orders||[]).filter((o:any)=>
-    o && !["cancelled","historical"].includes(String(o.status||"")) &&
+    o && o.status!=="cancelled" && (includeHistorical || o.status!=="historical") &&
     (!deliveryDate || String(o.deliveryDate||"")===deliveryDate)
   );
   const map=new Map<string,{

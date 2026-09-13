@@ -2,7 +2,7 @@ const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=(v='')=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-const state={view:'today',ops:null,orders:[],mail:null,auth:null,search:'',loading:false};
+const state={view:'today',ops:null,orders:[],mail:null,auth:null,search:'',deliveryDate:'',loading:false};
 const viewNames={today:['CENTRO DE OPERAÇÕES','Hoje'],deliveries:['PLANEAMENTO','Entregas'],needs:['DECISÕES','Precisa de mim'],orders:['GESTÃO','Encomendas'],customers:['RELAÇÃO COMERCIAL','Clientes'],activity:['AUDITORIA','Atividade IA'],emails:['HISTÓRICO','Emails / Histórico'],autonomy:['CONTROLO','Regras e autonomia']};
 const statusLabels={confirmed:'Confirmada',review:'A rever',awaiting_approval:'A aprovar',historical:'Histórica',cancelled:'Cancelada',draft:'Rascunho'};
 const weekday=new Intl.DateTimeFormat('pt-PT',{weekday:'long',timeZone:'Europe/Lisbon'});
@@ -136,12 +136,12 @@ function renderToday(){
 }
 
 function groupOrdersByDate(){
-  const active=state.orders.filter(o=>o.deliveryDate&&!['cancelled','historical'].includes(o.status));
+  const active=state.orders.filter(o=>o.deliveryDate&&o.status!=='cancelled');
   return active.reduce((m,o)=>{(m[o.deliveryDate]??=[]).push(o);return m;},{});
 }
 function renderDeliveries(){
-  const groups=groupOrdersByDate();const dates=Object.keys(groups).sort();
-  return `${pageHead('Entregas','Uma visão por dia de distribuição — não por data de chegada do email.')}${dates.length?dates.map(date=>`<section class="panel" style="margin-bottom:14px"><div class="panel-head"><div><h3>${esc(formatDelivery(date))}</h3><p>${groups[date].length} encomenda${groups[date].length===1?'':'s'}</p></div><div class="page-actions"><button class="btn ghost" data-print-date="${date}">Imprimir preparação</button></div></div><div class="panel-body"><div class="order-list">${groups[date].map(orderCard).join('')}</div></div></section>`).join(''):empty('Não existem entregas futuras registadas.')}`;
+  const groups=groupOrdersByDate();const dates=Object.keys(groups).filter(d=>!state.deliveryDate||d===state.deliveryDate).sort().reverse();
+  return `${pageHead('Encomendas por data','Consulta e imprime as encomendas, incluindo dias anteriores.')}<div class="page-actions" style="margin-bottom:16px;flex-wrap:wrap"><label>Data de entrega <input type="date" id="deliveryDateFilter" value="${esc(state.deliveryDate)}"></label><button class="btn ghost" data-delivery-offset="-1">Ontem</button><button class="btn ghost" data-delivery-offset="0">Hoje</button><button class="btn ghost" data-delivery-all>Todas as datas</button></div>${dates.length?dates.map(date=>`<section class="panel" style="margin-bottom:14px"><div class="panel-head"><div><h3>${esc(formatDelivery(date))}</h3><p>${groups[date].length} encomenda${groups[date].length===1?'':'s'}</p></div><div class="page-actions"><button class="btn ghost" data-print-date="${date}">Imprimir encomendas</button></div></div><div class="panel-body"><div class="order-list">${groups[date].map(orderCard).join('')}</div></div></section>`).join(''):empty('Não existem encomendas registadas para esta seleção. Em modo Sombra, as análises ainda não criam encomendas.')}`;
 }
 function renderNeeds(){const items=state.ops?.needsMe||[];return `${pageHead('Precisa de mim','Aqui só fica aquilo que o funcionário digital não deve decidir sozinho.') }<div class="needs-list">${items.length?items.map(needCard).join(''):empty('Fila vazia. Não tens decisões pendentes.')}</div>`;}
 
@@ -180,7 +180,11 @@ function bindDynamic(){
   $$('[data-order-id]').forEach(b=>b.onclick=()=>openOrder(b.dataset.orderId));
   $$('[data-mail-id]').forEach(b=>b.onclick=()=>openMail(b.dataset.mailId));
   $$('[data-new-order]').forEach(b=>b.onclick=openManualOrder);
-  $$('[data-print-date]').forEach(b=>b.onclick=()=>window.open(`/v9/print.html?date=${encodeURIComponent(b.dataset.printDate)}`,'_blank'));
+  const dateFilter=$('#deliveryDateFilter');if(dateFilter)dateFilter.onchange=()=>{state.deliveryDate=dateFilter.value;render();};
+  $$('[data-delivery-offset]').forEach(b=>b.onclick=()=>{const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Lisbon',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const val=t=>parts.find(p=>p.type===t).value;const d=new Date(`${val('year')}-${val('month')}-${val('day')}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+Number(b.dataset.deliveryOffset));state.deliveryDate=d.toISOString().slice(0,10);render();});
+  $$('[data-delivery-all]').forEach(b=>b.onclick=()=>{state.deliveryDate='';render();});
+  $$('[data-print-order]').forEach(b=>b.onclick=()=>window.open(`./print.html?id=${encodeURIComponent(b.dataset.printOrder)}`,'_blank'));
+  $$('[data-print-date]').forEach(b=>b.onclick=()=>window.open(`./print.html?date=${encodeURIComponent(b.dataset.printDate)}`,'_blank'));
 }
 
 function openDrawer(title,html){$('#drawerTitle').textContent=title;$('#drawerBody').innerHTML=html;$('#drawerBackdrop').hidden=false;$('#detailDrawer').classList.add('open');$('#detailDrawer').setAttribute('aria-hidden','false');}
@@ -218,7 +222,7 @@ async function rejectQueue(id){
 }
 
 function openOrder(id){const o=state.orders.find(x=>x.id===id)||(state.ops?.nextOrders||[]).find(x=>x.id===id);if(!o)return;
-  openDrawer(o.number||'Encomenda',`<section class="detail-section"><h3>Cliente e entrega</h3><div class="analysis-grid"><div class="analysis-cell"><small>Cliente</small><strong>${esc(o.storeName||o.customerName||'—')}</strong></div><div class="analysis-cell"><small>Entrega</small><strong>${esc(dateOnly(o.deliveryDate))}</strong></div><div class="analysis-cell"><small>Estado</small><strong>${esc(statusLabels[o.status]||o.status)}</strong></div><div class="analysis-cell"><small>Email</small><strong>${esc(o.customerEmail||'—')}</strong></div></div></section><section class="detail-section"><h3>Pedido final</h3><div class="order-items">${(o.items||[]).map(i=>`<span class="item-chip ${i.uncertain?'uncertain':''}">${esc(itemText(i))}</span>`).join('')||'Sem linhas'}</div></section>${(o.reviewReasons||[]).length?`<section class="detail-section"><h3>Alertas</h3><ul class="reason-list">${o.reviewReasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></section>`:''}<div class="drawer-actions"><button class="btn ghost" data-print-date="${esc(o.deliveryDate||'')}">Imprimir dia</button></div>`);bindDynamic();}
+  openDrawer(o.number||'Encomenda',`<section class="detail-section"><h3>Cliente e entrega</h3><div class="analysis-grid"><div class="analysis-cell"><small>Cliente</small><strong>${esc(o.storeName||o.customerName||'—')}</strong></div><div class="analysis-cell"><small>Entrega</small><strong>${esc(dateOnly(o.deliveryDate))}</strong></div><div class="analysis-cell"><small>Estado</small><strong>${esc(statusLabels[o.status]||o.status)}</strong></div><div class="analysis-cell"><small>Email</small><strong>${esc(o.customerEmail||'—')}</strong></div></div></section><section class="detail-section"><h3>Pedido final</h3><div class="order-items">${(o.items||[]).map(i=>`<span class="item-chip ${i.uncertain?'uncertain':''}">${esc(itemText(i))}</span>`).join('')||'Sem linhas'}</div></section>${(o.reviewReasons||[]).length?`<section class="detail-section"><h3>Alertas</h3><ul class="reason-list">${o.reviewReasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></section>`:''}<div class="drawer-actions"><button class="btn primary" data-print-order="${esc(o.id)}">Imprimir encomenda</button><button class="btn ghost" data-print-date="${esc(o.deliveryDate||'')}">Imprimir dia</button></div>`);bindDynamic();}
 function openMail(id){const m=(state.mail?.messages||[]).find(x=>x.id===id);if(!m)return;openDrawer(m.subject||'(sem assunto)',`<section class="detail-section"><h3>${m.direction==='out'?'Mensagem enviada':'Mensagem recebida'}</h3><div class="analysis-grid"><div class="analysis-cell"><small>De</small><strong>${esc(m.from||'—')}</strong></div><div class="analysis-cell"><small>Para</small><strong>${esc(m.to||'—')}</strong></div><div class="analysis-cell"><small>Data</small><strong>${esc(fmtWhen(m.date))}</strong></div><div class="analysis-cell"><small>Pasta</small><strong>${esc(m.folder||'—')}</strong></div></div></section><section class="detail-section"><h3>Original</h3><pre style="white-space:pre-wrap;font:inherit;line-height:1.55;background:var(--soft);padding:14px;border-radius:14px">${esc(m.text||'')}</pre></section>`);}
 
 function openManualOrder(){
