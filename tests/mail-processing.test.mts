@@ -38,6 +38,6 @@ test("assinatura não é duplicada se o rascunho já a tiver",()=>{
 test("versão HTML escapa conteúdo e mostra identificação IA",()=>{
   const result=formatManagedEmail("Produto <especial> & confirmação");
   assert.match(result.html,/Produto &lt;especial&gt; &amp; confirmação/);
-  assert.match(result.html,/Central Inteligente de Comunicações/);
+  assert.match(result.html,/VITALVEG \| CENTRAL AUTÓNOMA/);
   assert.equal(result.html.includes("<especial>"),false);
 });

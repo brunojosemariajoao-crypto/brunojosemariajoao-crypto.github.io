@@ -1,5 +1,5 @@
-export const AI_SIGNATURE_TITLE="VitalVeg · Central Inteligente de Comunicações";
-export const AI_SIGNATURE_HUMAN_COPY="Esta mensagem foi analisada e preparada pelo nosso sistema autónomo com recurso a Inteligência Artificial e validada antes do envio.";
+export const AI_SIGNATURE_TITLE="VITALVEG | CENTRAL AUTÓNOMA";
+export const AI_SIGNATURE_HUMAN_COPY="Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes. Nesta fase, cada mensagem é revista e validada antes do envio.";
 export const AI_SIGNATURE_AUTONOMOUS_COPY="Esta mensagem foi analisada, preparada e enviada automaticamente pelo nosso sistema autónomo com recurso a Inteligência Artificial, de acordo com as regras operacionais da VitalVeg.";
 export const AI_SIGNATURE_SYSTEM_COPY="Esta mensagem foi gerida pela Central Inteligente VitalVeg com recurso a Inteligência Artificial e enviada através do nosso sistema digital.";
 export const AI_SIGNATURE_COPY=AI_SIGNATURE_HUMAN_COPY;
@@ -17,8 +17,8 @@ function signatureCopy(actor:ManagedMailActor){
 
 export function stripManagedSignature(text:any){
   const value=String(text||"").trim();
-  const marker=AI_SIGNATURE_TITLE;
-  const index=value.indexOf(marker);
+  const positions=[AI_SIGNATURE_TITLE,"VitalVeg · Central Inteligente de Comunicações"].map(marker=>value.indexOf(marker)).filter(index=>index>=0);
+  const index=positions.length?Math.min(...positions):-1;
   if(index<0)return value;
   return value.slice(0,index).replace(/[\s—-]+$/g,"").trim();
 }

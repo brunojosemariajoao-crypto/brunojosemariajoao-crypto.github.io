@@ -19,7 +19,7 @@ export default async (req:Request, context:Context)=>{
 
   try{
     const finalText=appendAiSignature(draft);
-    const sent=await sendVitalVegMail({to,subject,text:finalText,inReplyTo,references});
+    const sent=await sendVitalVegMail({to,subject,text:finalText,inReplyTo,references,actor:"human"});
     await appendActivity("manual_message_sent",{
       authMode:auth.mode,to,subject,inReplyTo,messageId:sent.messageId,
       savedToSent:sent.savedToSent,sentWarning:sent.sentWarning,finalText

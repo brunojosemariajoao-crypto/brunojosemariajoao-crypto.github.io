@@ -203,7 +203,7 @@ async function openQueue(id){
       <section class="detail-section"><h3>Leitura do funcionário digital</h3><div class="analysis-grid"><div class="analysis-cell"><small>Tipo</small><strong>${esc(a.messageType||'—')}</strong></div><div class="analysis-cell"><small>Confiança</small><strong>${conf?`${conf}%`:'—'}</strong></div><div class="analysis-cell"><small>Risco comercial</small><strong>${esc(a.commercialRisk||'—')}</strong></div><div class="analysis-cell"><small>Ação</small><strong>${esc(a.orderAction||'—')}</strong></div></div><div class="ai-confidence ${conf<90?'low':''}"><span style="width:${Math.max(0,Math.min(100,conf))}%"></span></div></section>
       <section class="detail-section"><h3>Encomenda consolidada</h3>${orderHtml}</section>
       <section class="detail-section"><h3>Porque está aqui</h3>${reasons}</section>
-      <section class="detail-section"><h3>Resposta preparada pela IA</h3><textarea id="approvalDraft" class="reply-editor" placeholder="Escreve ou corrige a resposta antes de enviar.">${esc(q.suggestedReply||'')}</textarea><div class="reply-footnote"><strong>A assinatura de Inteligência Artificial é acrescentada automaticamente pelo servidor.</strong><br>O texto que aprovares fica registado na auditoria e é guardada uma cópia na pasta Enviados.</div><div class="drawer-actions"><button id="approveSendBtn" class="btn primary">Aprovar e enviar</button><button id="rejectSuggestionBtn" class="btn danger">Rejeitar</button></div><p id="queueActionError" class="form-error"></p></section>`;
+      <section class="detail-section"><h3>Resposta preparada pela IA</h3><textarea id="approvalDraft" class="reply-editor" placeholder="Escreve ou corrige a resposta antes de enviar.">${esc(withManagedSignature(q.suggestedReply||''))}</textarea><div class="reply-footnote"><strong>A identificação da Central IA apresentada acima acompanha sempre a mensagem.</strong><br>O texto que aprovares fica registado na auditoria e é guardada uma cópia na pasta Enviados.</div><div class="drawer-actions"><button id="approveSendBtn" class="btn primary">Aprovar e enviar</button><button id="rejectSuggestionBtn" class="btn danger">Rejeitar</button></div><p id="queueActionError" class="form-error"></p></section>`;
     $('#approveSendBtn').onclick=()=>approveQueue(id);
     $('#rejectSuggestionBtn').onclick=()=>rejectQueue(id);
   }catch(e){$('#drawerBody').innerHTML=`<div class="warning-box">${esc(e.message)}</div>`;}
@@ -263,7 +263,7 @@ function editOrder(id){
 }
 function composeOrder(id){
  const o=state.orders.find(x=>x.id===id);if(!o)return;
- openDrawer('Mensagem sobre '+o.number,`<form id="orderMessageForm" class="order-form"><label class="field"><span>Para (email do cliente)</span><input type="email" name="to" value="${esc(o.customerEmail||'')}" placeholder="cliente@exemplo.pt" required></label>${!o.customerEmail?'<p class="reply-footnote">Preenche o email para enviar. Podes guardá-lo na encomenda em «Corrigir encomenda».</p>':''}<label class="field"><span>Assunto</span><input name="subject" value="${esc('Encomenda '+o.number)}" required></label><label class="field"><span>Mensagem — podes alterar antes de enviar</span><textarea class="reply-editor" name="text" rows="12" required>${esc(orderMessageDraft(o))}</textarea></label><p id="messageError" class="error"></p><button type="submit" class="btn primary">Confirmar e enviar mensagem</button></form>`);
+ openDrawer('Mensagem sobre '+o.number,`<form id="orderMessageForm" class="order-form"><label class="field"><span>Para (email do cliente)</span><input type="email" name="to" value="${esc(o.customerEmail||'')}" placeholder="cliente@exemplo.pt" required></label>${!o.customerEmail?'<p class="reply-footnote">Preenche o email para enviar. Podes guardá-lo na encomenda em «Corrigir encomenda».</p>':''}<label class="field"><span>Assunto</span><input name="subject" value="${esc('Encomenda '+o.number)}" required></label><label class="field"><span>Mensagem — podes alterar antes de enviar</span><textarea class="reply-editor" name="text" rows="12" required>${esc(withManagedSignature(orderMessageDraft(o)))}</textarea></label><p id="messageError" class="error"></p><button type="submit" class="btn primary">Confirmar e enviar mensagem</button></form>`);
  $('#orderMessageForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,b=f.querySelector('[type="submit"]');b.disabled=true;try{await api('/api/send',{method:'POST',body:JSON.stringify({to:f.elements.to.value.trim(),subject:f.elements.subject.value,text:f.elements.text.value})});toast('Mensagem enviada.');closeDrawer();await loadAll(true);}catch(err){$('#messageError').textContent=err.message;}finally{b.disabled=false;}};
 }
 
@@ -282,4 +282,13 @@ function orderMessageDraft(o){
  }
  parts.push('Obrigado,\nVitalVeg');
  return parts.join('\n\n');
+}
+
+function withManagedSignature(text){
+ const title='VITALVEG | CENTRAL AUTÓNOMA';
+ const copy='Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes. Nesta fase, cada mensagem é revista e validada antes do envio.';
+ const value=String(text||'').trim();
+ const positions=[title,'VitalVeg · Central Inteligente de Comunicações'].map(marker=>value.indexOf(marker)).filter(index=>index>=0);
+ const body=(positions.length?value.slice(0,Math.min(...positions)):value).replace(/[\s—-]+$/g,'').trim();
+ return (body?body+'\n\n—\n':'')+title+'\n'+copy;
 }
