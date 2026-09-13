@@ -19,7 +19,8 @@ function makeLines(items:any[],source:string):OrderLine[]{
       key:itemKey(seed),quantity,unit,product,normalizedProduct:seed.normalizedProduct,
       notes:String(raw?.notes||"").trim()||null,
       rawLine:String(raw?.rawLine||`${quantity??""} ${unit??""} ${product}`).trim(),
-      confidence:1,uncertain:false,lastSourceMessageId:source
+      fulfillment:["accepted","unavailable","pending"].includes(raw?.fulfillment)?raw.fulfillment:"accepted",
+      confidence:1,uncertain:raw?.fulfillment==="pending",lastSourceMessageId:source
     };
   });
 }
@@ -85,6 +86,7 @@ export default async (req:Request, context:Context)=>{
       if(body.customerName!==undefined)order.customerName=String(body.customerName||"").trim()||null;
       if(body.customerEmail!==undefined)order.customerEmail=cleanEmail(body.customerEmail);
       if(body.storeName!==undefined)order.storeName=String(body.storeName||"").trim()||null;
+      for(const key of ["customerPhone","customerAddress","customerNotes"] as const){if(body[key]!==undefined)order[key]=String(body[key]||"").trim()||null;}
       if(Array.isArray(body.items)){
         if(!body.items.length)return json({error:"A encomenda precisa de pelo menos um artigo"},400);
         order.items=makeLines(body.items,`manual-edit:${randomUUID()}`);

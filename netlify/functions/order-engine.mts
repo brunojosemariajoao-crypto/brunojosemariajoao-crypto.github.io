@@ -56,6 +56,9 @@ export type OrderLine = {
 };
 
 export type OrderRecord = {
+  customerPhone?:string|null;
+  customerAddress?:string|null;
+  customerNotes?:string|null;
   appliedEventIds?:string[];
   id:string;
   number:string;
