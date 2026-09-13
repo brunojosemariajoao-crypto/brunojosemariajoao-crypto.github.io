@@ -286,7 +286,7 @@ function orderMessageDraft(o){
 
 function withManagedSignature(text){
  const title='VITALVEG | CENTRAL AUTÓNOMA';
- const copy='Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes. Nesta fase, cada mensagem é revista e validada antes do envio.';
+ const copy='Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes.';
  const value=String(text||'').trim();
  const positions=[title,'VitalVeg · Central Inteligente de Comunicações'].map(marker=>value.indexOf(marker)).filter(index=>index>=0);
  const body=(positions.length?value.slice(0,Math.min(...positions)):value).replace(/[\s—-]+$/g,'').trim();

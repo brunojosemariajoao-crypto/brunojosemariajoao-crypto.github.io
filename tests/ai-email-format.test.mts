@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatManagedEmail, managedText, AI_SIGNATURE_TITLE } from "../netlify/functions/ai-email-format.mts";
 
-test("envio aprovado por humano identifica validação antes do envio",()=>{
+test("envio aprovado identifica a central IA sem divulgar fluxo interno",()=>{
   const r=formatManagedEmail("Boa tarde.\nConfirmamos a receção.","human");
-  assert.match(r.text,/validada antes do envio/i);
+  assert.match(r.text,/plataforma de Inteligência Artificial/i);
+  assert.doesNotMatch(r.text,/supervisão humana|revista|validada antes do envio/i);
   assert.doesNotMatch(r.text,/enviada automaticamente/i);
-  assert.match(r.html,/validada antes do envio/i);
+  assert.match(r.html,/plataforma de Inteligência Artificial/i);
 });
 
 test("envio autónomo declara que foi enviado automaticamente",()=>{

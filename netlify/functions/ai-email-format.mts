@@ -1,5 +1,5 @@
 export const AI_SIGNATURE_TITLE="VITALVEG | CENTRAL AUTÓNOMA";
-export const AI_SIGNATURE_HUMAN_COPY="Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes. Nesta fase, cada mensagem é revista e validada antes do envio.";
+export const AI_SIGNATURE_HUMAN_COPY="Gestão de encomendas e comunicação inteligente. Esta comunicação é emitida pela plataforma de Inteligência Artificial da VitalVeg, que integra a análise de pedidos e a comunicação com clientes.";
 export const AI_SIGNATURE_AUTONOMOUS_COPY="Esta mensagem foi analisada, preparada e enviada automaticamente pelo nosso sistema autónomo com recurso a Inteligência Artificial, de acordo com as regras operacionais da VitalVeg.";
 export const AI_SIGNATURE_SYSTEM_COPY="Esta mensagem foi gerida pela Central Inteligente VitalVeg com recurso a Inteligência Artificial e enviada através do nosso sistema digital.";
 export const AI_SIGNATURE_COPY=AI_SIGNATURE_HUMAN_COPY;
