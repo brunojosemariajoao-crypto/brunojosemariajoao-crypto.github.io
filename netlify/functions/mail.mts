@@ -41,18 +41,21 @@ export default async (req:Request, context:Context)=>{
   if(!authorized)return noStore({error:"Acesso VitalVeg não autorizado"},401);
 
   try{
-    // A V9 usa uma sessão partilhada e um histórico incremental no servidor.
-    // PC e telemóvel deixam de depender do cookie antigo vv_device para ler a mesma caixa.
+    // Na V9, um refresh da aplicação tem de confirmar a caixa real e não apenas devolver um snapshot antigo.
+    // O job automático continua ativo; este caminho é a garantia adicional quando o operador abre/atualiza a Central.
     if(sessionAuthorized){
       if(req.method==="GET"){
         let snapshot=await getV9MailSnapshot();
-        if(!snapshot){
-          try{snapshot=await syncV9Mailbox();}catch{}
+        try{
+          snapshot=await syncV9Mailbox();
+          return noStore({...snapshot,cached:false,v9:true,liveSync:true});
+        }catch(error:any){
+          if(!snapshot)throw error;
+          return noStore({...snapshot,cached:true,v9:true,liveSync:false,syncWarning:"Não foi possível confirmar a caixa em tempo real; a Central está a mostrar o último estado guardado."});
         }
-        if(snapshot)return noStore({...snapshot,cached:true,v9:true});
       }else{
         const snapshot=await syncV9Mailbox();
-        const response=noStore({...snapshot,cached:false,v9:true});
+        const response=noStore({...snapshot,cached:false,v9:true,liveSync:true});
         if(freshToken)response.headers.set("Set-Cookie",deviceCookie(freshToken));
         return response;
       }
